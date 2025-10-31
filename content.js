@@ -1777,27 +1777,27 @@ Instructions:
       )
       .replace(
         /^## (.*$)/gm,
-        '<h2 style="color: #2c3e50; font-size: 20px; font-weight: 600; margin: 20px 0 10px 0; border-bottom: 2px solid #4285f4; padding-bottom: 6px;">$1</h2>'
+        '<h2 style="color: #2c3e50; font-size: 20px; font-weight: 600; margin: 20px 0 10px 0; border-bottom: 2px solid #9C88FF; padding-bottom: 6px;">$1</h2>'
       )
       .replace(
         /^# (.*$)/gm,
-        '<h1 style="color: #2c3e50; font-size: 22px; font-weight: 700; margin: 24px 0 12px 0; border-bottom: 3px solid #4285f4; padding-bottom: 8px;">$1</h1>'
+        '<h1 style="color: #2c3e50; font-size: 22px; font-weight: 700; margin: 24px 0 12px 0; border-bottom: 3px solid #9C88FF; padding-bottom: 8px;">$1</h1>'
       )
 
       // Convert bullet points
       .replace(
         /^\* (.*$)/gm,
-        '<div style="margin: 6px 0; padding-left: 20px; position: relative;"><span style="position: absolute; left: 0; color: #4285f4; font-weight: bold;">•</span>$1</div>'
+        '<div style="margin: 6px 0; padding-left: 20px; position: relative;"><span style="position: absolute; left: 0; color: #9C88FF; font-weight: bold;">•</span>$1</div>'
       )
       .replace(
         /^- (.*$)/gm,
-        '<div style="margin: 6px 0; padding-left: 20px; position: relative;"><span style="position: absolute; left: 0; color: #4285f4; font-weight: bold;">•</span>$1</div>'
+        '<div style="margin: 6px 0; padding-left: 20px; position: relative;"><span style="position: absolute; left: 0; color: #9C88FF; font-weight: bold;">•</span>$1</div>'
       )
 
       // Convert numbered lists (fixed)
       .replace(
         /^(\d+)\. (.*$)/gm,
-        '<div style="margin: 6px 0; padding-left: 24px; position: relative;"><span style="position: absolute; left: 0; color: #4285f4; font-weight: bold;">$1.</span>$2</div>'
+        '<div style="margin: 6px 0; padding-left: 24px; position: relative;"><span style="position: absolute; left: 0; color: #9C88FF; font-weight: bold;">$1.</span>$2</div>'
       )
 
       // Convert bold text

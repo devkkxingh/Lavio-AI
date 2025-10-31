@@ -916,60 +916,201 @@ class LavioBackground {
 User Input: "${userInput}"
 ${elementsDescription}
 
-ACTION REQUESTS are commands to interact with the page, like:
-- Click on [element]
-- Scroll down/up
-- Go back/forward
-- Type [text] in [field]
-- Focus on [element]
-- Open [link]
+ACTION REQUESTS are commands to interact with the page (even if phrased politely), like:
+- "Click on [element]"
+- "Can you click on [element]"
+- "Please scroll down"
+- "Go back"
+- "Type [text] in [field]"
+- "Can you focus on [element]"
+- "Could you open [link]"
+- "Would you scroll up"
 
-QUESTIONS are requests for information, like:
-- What is this page about?
-- Tell me about [topic]
-- Explain [concept]
-- Summarize this
+KEY: If the user asks you to DO something on the page (click, scroll, type, navigate, focus), it's an ACTION even if they say "can you", "please", "hello", etc.
 
-FOR THIS TASK ONLY, respond in this EXACT JSON format (do not use this format for other tasks):
+QUESTIONS are requests for information only, like:
+- "What is this page about?"
+- "Tell me about [topic]"
+- "Explain [concept]"
+- "Summarize this"
+- "Who is the author?"
+
+Respond with ONLY valid JSON. No markdown, no code blocks, no extra text. Just the JSON object.
+
+Use this EXACT structure:
 {
-  "isAction": true/false,
-  "confidence": 0.0-1.0,
-  "actionType": "click/scroll/navigate/type/focus" OR null,
-  "targetDescription": "description of target element" OR null,
-  "additionalData": "any extra data like text to type" OR null,
-  "reasoning": "brief explanation"
+  "isAction": false,
+  "confidence": 1.0,
+  "actionType": null,
+  "targetDescription": null,
+  "additionalData": null,
+  "reasoning": "This is a question"
 }
 
-Return ONLY the JSON object, nothing else.`;
+Rules for JSON:
+- Use double quotes for strings
+- Use null (not "null" or NULL) for empty values
+- Use true/false (not "true" or "false") for booleans
+- Use numbers without quotes for confidence (0.0 to 1.0)
+- For actionType, use ONLY: "click", "scroll", "navigate", "type", "focus", or null
+- Keep reasoning under 50 characters
+
+Return ONLY the JSON object.`;
 
       const response = await this.aiSession.prompt(prompt);
 
       // Parse the JSON response
       try {
+        // Log the raw response for debugging
+        console.log("Lavio: Raw intent response:", response.substring(0, 200));
+
+        // Try to clean up common JSON issues
+        let cleanedResponse = response.trim();
+
+        // Remove markdown code blocks if present
+        cleanedResponse = cleanedResponse
+          .replace(/```json\s*/g, "")
+          .replace(/```\s*$/g, "");
+
         // Extract JSON from response (AI might include extra text)
-        const jsonMatch = response.match(/\{[\s\S]*\}/);
+        const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
         if (!jsonMatch) {
+          console.warn(
+            "Lavio: No JSON found in response, treating as question"
+          );
           throw new Error("No JSON found in response");
         }
 
-        const intent = JSON.parse(jsonMatch[0]);
+        let jsonStr = jsonMatch[0];
+
+        // Fix common JSON issues
+        // Replace OR with null
+        jsonStr = jsonStr.replace(/OR null/g, "null");
+        // Fix unquoted null, true, false
+        jsonStr = jsonStr.replace(/:\s*null\s*([,}])/g, ": null$1");
+        jsonStr = jsonStr.replace(/:\s*true\s*([,}])/g, ": true$1");
+        jsonStr = jsonStr.replace(/:\s*false\s*([,}])/g, ": false$1");
+
+        const intent = JSON.parse(jsonStr);
 
         // Validate the response structure
         if (typeof intent.isAction !== "boolean") {
+          console.warn("Lavio: Invalid intent format, treating as question");
           throw new Error("Invalid intent format");
+        }
+
+        console.log("Lavio: Parsed intent:", intent);
+
+        // Double-check with heuristics if AI says it's not an action
+        // but it contains clear action keywords in an imperative context
+        if (!intent.isAction) {
+          const lowerInput = userInput.toLowerCase();
+
+          // Check for action keywords (with context)
+          const actionKeywords = [
+            "click on",
+            "press on",
+            "scroll",
+            "type",
+            "enter",
+            "focus on",
+          ];
+          const hasStrongActionKeyword = actionKeywords.some((keyword) =>
+            lowerInput.includes(keyword)
+          );
+
+          // Check for request/command phrases
+          const hasRequestPhrase =
+            lowerInput.includes("can you") ||
+            lowerInput.includes("could you") ||
+            lowerInput.includes("would you") ||
+            lowerInput.includes("please") ||
+            lowerInput.includes("go back") ||
+            lowerInput.includes("go forward");
+
+          // Only override if it's clearly a command/request
+          if (
+            hasStrongActionKeyword ||
+            (hasRequestPhrase && lowerInput.length < 100)
+          ) {
+            console.warn(
+              "Lavio: AI classified as question but appears to be an action command, overriding"
+            );
+            console.warn(`  - Action keyword: ${hasStrongActionKeyword}`);
+            console.warn(`  - Request phrase: ${hasRequestPhrase}`);
+            intent.isAction = true;
+            intent.confidence = Math.max(intent.confidence, 0.7);
+            intent.reasoning = "Overridden - detected as action via heuristics";
+          }
         }
 
         return intent;
       } catch (parseError) {
-        console.error("Error parsing intent JSON:", parseError);
+        console.error("Lavio: Error parsing intent JSON:", parseError.message);
+        console.error("Lavio: Response was:", response.substring(0, 300));
+
+        // Fallback: Use simple heuristics to detect actions
+        const lowerInput = userInput.toLowerCase();
+
+        // Check for action keywords
+        const actionKeywords = [
+          "click",
+          "press",
+          "tap",
+          "scroll",
+          "swipe",
+          "go back",
+          "go forward",
+          "navigate",
+          "refresh",
+          "reload",
+          "type",
+          "enter",
+          "input",
+          "fill",
+          "focus",
+          "select",
+          "open",
+          "close",
+        ];
+
+        const hasActionKeyword = actionKeywords.some((keyword) =>
+          lowerInput.includes(keyword)
+        );
+
+        // Check if it's phrased as a request (even polite)
+        const hasRequestPhrase =
+          lowerInput.includes("can you") ||
+          lowerInput.includes("could you") ||
+          lowerInput.includes("would you") ||
+          lowerInput.includes("please");
+
+        // If it has an action keyword, it's likely an action
+        // Even more likely if it has both action keyword and request phrase
+        const isLikelyAction =
+          hasActionKeyword &&
+          (hasRequestPhrase ||
+            !lowerInput.includes("?") || // Not a question format
+            lowerInput.split(" ").length < 15); // Short commands are usually actions
+
+        if (isLikelyAction) {
+          console.log("Lavio: Using heuristic - detected as likely action");
+          console.log(`  - Has action keyword: ${hasActionKeyword}`);
+          console.log(`  - Has request phrase: ${hasRequestPhrase}`);
+        } else {
+          console.log("Lavio: Using heuristic - detected as likely question");
+          console.log(`  - Has action keyword: ${hasActionKeyword}`);
+          console.log(`  - Has request phrase: ${hasRequestPhrase}`);
+        }
+
         // Fallback: treat as question if parsing fails
         return {
-          isAction: false,
-          confidence: 0.5,
+          isAction: isLikelyAction,
+          confidence: 0.3, // Low confidence due to parsing failure
           actionType: null,
           targetDescription: null,
           additionalData: null,
-          reasoning: "Failed to parse intent, treating as question",
+          reasoning: "Failed to parse AI response, using heuristics",
         };
       }
     } catch (error) {
