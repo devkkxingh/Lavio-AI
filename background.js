@@ -1022,6 +1022,47 @@ Return ONLY the JSON object.`;
    */
   async detectActionIntent(userInput, pageElements = []) {
     try {
+      // PRE-FILTER: Check if input is clearly a question BEFORE sending to AI
+      // This prevents AI misclassification of common information requests
+      const lowerInput = userInput.toLowerCase().trim();
+
+      const definiteQuestionPhrases = [
+        "tell me about",
+        "tell me what",
+        "what is this page",
+        "what's this page",
+        "what does this page",
+        "explain this page",
+        "describe this page",
+        "summarize this page",
+        "about this page",
+        "what is the page",
+        "what's the page",
+        "can you tell me about",
+        "could you tell me about",
+        "can you explain",
+        "could you explain",
+      ];
+
+      // If input starts with or contains these phrases, it's definitely a question
+      const isDefiniteQuestion = definiteQuestionPhrases.some((phrase) =>
+        lowerInput.includes(phrase)
+      );
+
+      if (isDefiniteQuestion) {
+        console.log(
+          "Lavio: Pre-filter detected information request, skipping AI classification"
+        );
+        return {
+          isAction: false,
+          confidence: 1.0,
+          actionType: null,
+          targetDescription: null,
+          additionalData: null,
+          reasoning: "Information request (pre-filtered)",
+        };
+      }
+
       // Create a prompt that asks AI to classify the intent
       const elementsDescription =
         pageElements.length > 0
@@ -1036,108 +1077,37 @@ Return ONLY the JSON object.`;
               .join("\n")}`
           : "";
 
-      const prompt = `CLASSIFICATION TASK: Analyze this user input and determine if it's an ACTION REQUEST or a QUESTION.
+      const prompt = `Classify user intent: QUESTION (wants information) or ACTION (wants page interaction).
 
-User Input: "${userInput}"
+User: "${userInput}"
 ${elementsDescription}
 
-ACTION REQUESTS are commands to PHYSICALLY INTERACT with page elements OR MODIFY page appearance, like:
-- "Click on [element]"
-- "Can you click on [element]"
-- "Please scroll down"
-- "Go back"
-- "Type [text] in [field]"
-- "Focus on [element]"
-- "Make text larger"
-- "Enable dark mode"
-- "Hide ads"
-- "Change background to blue"
+CRITICAL: Information keywords → QUESTION (isAction: false):
+"tell me", "what is/are/does", "explain", "describe", "summarize", "which", "who", "when", "where", "how", "about this/the page"
 
-QUESTIONS are requests for INFORMATION (even if phrased as requests), like:
-- "What is this page about?"
-- "Tell me about [topic]"
-- "Can you tell me about [something]?"
-- "Explain [concept]"
-- "Summarize this"
-- "Which post has the most views?"
-- "What does this page say?"
-- "Find me the [information]"
-- "Show me the [information]"
-
-CRITICAL RULES:
-1. If the user wants INFORMATION (tell me, what is, which, who, explain, describe, find), it's a QUESTION
-2. If the user wants to INTERACT with the page (click, scroll, type, navigate), it's an ACTION
-3. If the user wants to MODIFY page appearance (text size, colors, dark mode, hide elements), it's an ACTION
-4. Phrases like "can you tell me", "can you explain", "can you find" are QUESTIONS, not actions
-5. Phrases like "can you make", "can you change", "can you hide" are ACTIONS
-6. Looking for data/content on the page = QUESTION
-7. Manipulating or modifying the page = ACTION
-8. If you identify an actionType (like modify_text_size), isAction MUST be true
-
-Respond with ONLY valid JSON. No markdown, no code blocks, no extra text. Just the JSON object.
-
-Use this EXACT structure:
+Response format (JSON only, no markdown):
 {
   "isAction": false,
   "confidence": 1.0,
   "actionType": null,
   "targetDescription": null,
   "additionalData": null,
-  "reasoning": "This is a question"
+  "reasoning": "question/action type"
 }
 
-Rules for JSON:
-- Use double quotes for strings
-- Use null (not "null" or NULL) for empty values
-- Use true/false (not "true" or "false") for booleans
-- Use numbers without quotes for confidence (0.0 to 1.0)
-- For actionType, use ONLY: "click", "scroll", "navigate", "type", "focus", "modify_text_size", "modify_theme", "modify_color", "modify_visibility", "modify_layout", "modify_focus", "modify_zoom", "modify_reset", or null
-- Keep reasoning under 50 characters
+ActionTypes: "click" (buttons/links/tabs), "navigate" (back/forward/refresh only), "type" (text input), "scroll", "focus", "modify_text_size", "modify_theme", "modify_color", "modify_visibility", or null
 
-IMPORTANT - Field Descriptions:
-- actionType: The type of action (click, scroll, navigate, type, focus)
-- targetDescription: WHAT element to interact with (e.g., "search bar", "back button", "email field")
-- additionalData: EXTRA information needed for the action
-  * For "type": the TEXT to type (e.g., "Krishna", "hello world")
-  * For "scroll": direction (e.g., "down", "up", "top", "bottom")
-  * For "navigate": action (e.g., "back", "forward", "refresh")
-  * For "click" and "focus": use null
+Fields:
+- targetDescription: element to interact with
+- additionalData: for type=text to type, scroll=direction, navigate=action
 
-EXAMPLES:
-Input: "Type Krishna in Go to file"
-Output: {"isAction": true, "confidence": 0.95, "actionType": "type", "targetDescription": "Go to file", "additionalData": "Krishna", "reasoning": "Type action"}
-
-Input: "Type hello world in the search box"
-Output: {"isAction": true, "confidence": 0.95, "actionType": "type", "targetDescription": "search box", "additionalData": "hello world", "reasoning": "Type action"}
-
-Input: "Click on search button"
-Output: {"isAction": true, "confidence": 0.95, "actionType": "click", "targetDescription": "search button", "additionalData": null, "reasoning": "Click action"}
-
-Input: "Scroll to the bottom"
-Output: {"isAction": true, "confidence": 0.95, "actionType": "scroll", "targetDescription": null, "additionalData": "bottom", "reasoning": "Scroll action"}
-
-Input: "Make text larger"
-Output: {"isAction": true, "confidence": 0.95, "actionType": "modify_text_size", "targetDescription": null, "additionalData": "increase", "reasoning": "Text size"}
-
-Input: "Make text smaller"
-Output: {"isAction": true, "confidence": 0.95, "actionType": "modify_text_size", "targetDescription": null, "additionalData": "decrease", "reasoning": "Text size"}
-
-Input: "Reset text size"
-Output: {"isAction": true, "confidence": 0.95, "actionType": "modify_text_size", "targetDescription": null, "additionalData": "reset", "reasoning": "Text size"}
-
-Input: "Can you make the text size on the page bigger"
-Output: {"isAction": true, "confidence": 0.95, "actionType": "modify_text_size", "targetDescription": null, "additionalData": "increase", "reasoning": "Text size"}
-
-Input: "Enable dark mode"
-Output: {"isAction": true, "confidence": 0.95, "actionType": "modify_theme", "targetDescription": null, "additionalData": "dark", "reasoning": "Dark mode"}
-
-Input: "Hide ads"
-Output: {"isAction": true, "confidence": 0.95, "actionType": "modify_visibility", "targetDescription": "ads", "additionalData": "hide", "reasoning": "Hide elements"}
-
-Input: "Change background to blue"
-Output: {"isAction": true, "confidence": 0.95, "actionType": "modify_color", "targetDescription": "background", "additionalData": "blue", "reasoning": "Color change"}
-
-Return ONLY the JSON object.`;
+Examples:
+Q: "Tell me about page" → {"isAction": false, "confidence": 1.0, "actionType": null, "targetDescription": null, "additionalData": null, "reasoning": "Info"}
+Q: "Click on actions" → {"isAction": true, "confidence": 0.95, "actionType": "click", "targetDescription": "actions", "additionalData": null, "reasoning": "Click"}
+Q: "Type hello in search" → {"isAction": true, "confidence": 0.95, "actionType": "type", "targetDescription": "search", "additionalData": "hello", "reasoning": "Type"}
+Q: "Go back" → {"isAction": true, "confidence": 0.95, "actionType": "navigate", "targetDescription": null, "additionalData": "back", "reasoning": "Navigate"}
+Q: "Scroll down" → {"isAction": true, "confidence": 0.95, "actionType": "scroll", "targetDescription": null, "additionalData": "down", "reasoning": "Scroll"}
+Q: "Make text bigger" → {"isAction": true, "confidence": 0.95, "actionType": "modify_text_size", "targetDescription": null, "additionalData": "increase", "reasoning": "Text size"}`;
 
       const response = await this.aiSession.prompt(prompt);
 
@@ -1201,26 +1171,38 @@ Return ONLY the JSON object.`;
 
           // Check for INFORMATION REQUEST keywords (questions)
           const informationKeywords = [
+            "tell me about",
+            "tell me what",
             "tell me",
             "what is",
             "what are",
             "what does",
+            "what's",
             "how does",
             "why does",
             "explain",
             "describe",
             "summarize",
+            "summary",
             "which",
             "who",
             "when",
             "where",
             "about this page",
             "about the page",
+            "about this",
+            "about the",
+            "this page",
+            "the page",
             "most views",
             "most likes",
             "most popular",
             "find the",
             "show me the",
+            "information about",
+            "details about",
+            "can you tell",
+            "could you tell",
           ];
           const isInformationRequest = informationKeywords.some((keyword) =>
             lowerInput.includes(keyword)
@@ -1237,8 +1219,13 @@ Return ONLY the JSON object.`;
           // Check for action keywords (with context)
           const actionKeywords = [
             "click on",
+            "click",
             "press on",
+            "press",
             "tap on",
+            "tap",
+            "can you click",
+            "can you press",
             "scroll",
             "type",
             "enter",
@@ -1292,6 +1279,103 @@ Return ONLY the JSON object.`;
             console.warn(`  - Action keyword found: ${hasStrongActionKeyword}`);
             intent.isAction = true;
             intent.confidence = Math.max(intent.confidence, 0.7);
+
+            // Determine the correct actionType based on keywords
+            if (
+              lowerInput.includes("click") ||
+              lowerInput.includes("press") ||
+              lowerInput.includes("tap")
+            ) {
+              intent.actionType = "click";
+              // Extract target description (text after "click on" / "press" / "tap on")
+              const clickMatch = lowerInput.match(
+                /(?:click|press|tap)\s+(?:on\s+)?(.+)/
+              );
+              if (clickMatch && clickMatch[1]) {
+                intent.targetDescription = clickMatch[1].trim();
+              }
+            } else if (lowerInput.includes("scroll")) {
+              intent.actionType = "scroll";
+              // Determine direction
+              if (lowerInput.includes("down")) intent.additionalData = "down";
+              else if (lowerInput.includes("up")) intent.additionalData = "up";
+              else if (lowerInput.includes("bottom"))
+                intent.additionalData = "bottom";
+              else if (lowerInput.includes("top"))
+                intent.additionalData = "top";
+            } else if (
+              lowerInput.includes("type") ||
+              lowerInput.includes("enter")
+            ) {
+              intent.actionType = "type";
+              // Try to extract what to type and where
+              const typeMatch = lowerInput.match(
+                /(?:type|enter)\s+(.+?)\s+(?:in|into)\s+(.+)/
+              );
+              if (typeMatch) {
+                intent.additionalData = typeMatch[1].trim();
+                intent.targetDescription = typeMatch[2].trim();
+              }
+            } else if (
+              lowerInput.includes("go back") ||
+              lowerInput.includes("go forward") ||
+              lowerInput.includes("refresh")
+            ) {
+              intent.actionType = "navigate";
+              if (lowerInput.includes("back")) intent.additionalData = "back";
+              else if (lowerInput.includes("forward"))
+                intent.additionalData = "forward";
+              else if (lowerInput.includes("refresh"))
+                intent.additionalData = "refresh";
+            } else if (
+              lowerInput.includes("text") &&
+              (lowerInput.includes("larger") ||
+                lowerInput.includes("smaller") ||
+                lowerInput.includes("bigger") ||
+                lowerInput.includes("size"))
+            ) {
+              intent.actionType = "modify_text_size";
+              if (
+                lowerInput.includes("larger") ||
+                lowerInput.includes("bigger") ||
+                lowerInput.includes("increase")
+              ) {
+                intent.additionalData = "increase";
+              } else if (
+                lowerInput.includes("smaller") ||
+                lowerInput.includes("decrease") ||
+                lowerInput.includes("reduce")
+              ) {
+                intent.additionalData = "decrease";
+              } else if (
+                lowerInput.includes("reset") ||
+                lowerInput.includes("normal") ||
+                lowerInput.includes("default")
+              ) {
+                intent.additionalData = "reset";
+              }
+            } else if (
+              lowerInput.includes("dark mode") ||
+              lowerInput.includes("light mode")
+            ) {
+              intent.actionType = "modify_theme";
+              intent.additionalData = lowerInput.includes("dark")
+                ? "dark"
+                : "light";
+            } else if (
+              lowerInput.includes("hide") ||
+              lowerInput.includes("show")
+            ) {
+              intent.actionType = "modify_visibility";
+              intent.additionalData = lowerInput.includes("hide")
+                ? "hide"
+                : "show";
+            } else if (lowerInput.includes("focus on")) {
+              intent.actionType = "focus";
+              const focusMatch = lowerInput.match(/focus\s+on\s+(.+)/);
+              if (focusMatch) intent.targetDescription = focusMatch[1].trim();
+            }
+
             intent.reasoning = "Overridden - detected as action via heuristics";
           }
         }
@@ -1306,25 +1390,37 @@ Return ONLY the JSON object.`;
 
         // Check for INFORMATION REQUEST keywords first
         const informationKeywords = [
+          "tell me about",
+          "tell me what",
           "tell me",
           "what is",
           "what are",
           "what does",
+          "what's",
           "how does",
           "why does",
           "explain",
           "describe",
           "summarize",
+          "summary",
           "which",
           "who",
           "when",
           "where",
+          "about this page",
+          "about the page",
+          "about this",
+          "about the",
           "about",
           "most views",
           "most likes",
           "most popular",
           "find the",
           "show me the",
+          "information about",
+          "details about",
+          "can you tell",
+          "could you tell",
         ];
         const isInformationRequest = informationKeywords.some((keyword) =>
           lowerInput.includes(keyword)
