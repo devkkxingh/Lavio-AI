@@ -1041,13 +1041,17 @@ Return ONLY the JSON object.`;
 User Input: "${userInput}"
 ${elementsDescription}
 
-ACTION REQUESTS are commands to PHYSICALLY INTERACT with page elements, like:
+ACTION REQUESTS are commands to PHYSICALLY INTERACT with page elements OR MODIFY page appearance, like:
 - "Click on [element]"
 - "Can you click on [element]"
 - "Please scroll down"
 - "Go back"
 - "Type [text] in [field]"
 - "Focus on [element]"
+- "Make text larger"
+- "Enable dark mode"
+- "Hide ads"
+- "Change background to blue"
 
 QUESTIONS are requests for INFORMATION (even if phrased as requests), like:
 - "What is this page about?"
@@ -1063,9 +1067,12 @@ QUESTIONS are requests for INFORMATION (even if phrased as requests), like:
 CRITICAL RULES:
 1. If the user wants INFORMATION (tell me, what is, which, who, explain, describe, find), it's a QUESTION
 2. If the user wants to INTERACT with the page (click, scroll, type, navigate), it's an ACTION
-3. Phrases like "can you tell me", "can you explain", "can you find" are QUESTIONS, not actions
-4. Looking for data/content on the page = QUESTION
-5. Manipulating the page = ACTION
+3. If the user wants to MODIFY page appearance (text size, colors, dark mode, hide elements), it's an ACTION
+4. Phrases like "can you tell me", "can you explain", "can you find" are QUESTIONS, not actions
+5. Phrases like "can you make", "can you change", "can you hide" are ACTIONS
+6. Looking for data/content on the page = QUESTION
+7. Manipulating or modifying the page = ACTION
+8. If you identify an actionType (like modify_text_size), isAction MUST be true
 
 Respond with ONLY valid JSON. No markdown, no code blocks, no extra text. Just the JSON object.
 
@@ -1084,7 +1091,7 @@ Rules for JSON:
 - Use null (not "null" or NULL) for empty values
 - Use true/false (not "true" or "false") for booleans
 - Use numbers without quotes for confidence (0.0 to 1.0)
-- For actionType, use ONLY: "click", "scroll", "navigate", "type", "focus", or null
+- For actionType, use ONLY: "click", "scroll", "navigate", "type", "focus", "modify_text_size", "modify_theme", "modify_color", "modify_visibility", "modify_layout", "modify_focus", "modify_zoom", "modify_reset", or null
 - Keep reasoning under 50 characters
 
 IMPORTANT - Field Descriptions:
@@ -1108,6 +1115,27 @@ Output: {"isAction": true, "confidence": 0.95, "actionType": "click", "targetDes
 
 Input: "Scroll to the bottom"
 Output: {"isAction": true, "confidence": 0.95, "actionType": "scroll", "targetDescription": null, "additionalData": "bottom", "reasoning": "Scroll action"}
+
+Input: "Make text larger"
+Output: {"isAction": true, "confidence": 0.95, "actionType": "modify_text_size", "targetDescription": null, "additionalData": "increase", "reasoning": "Text size"}
+
+Input: "Make text smaller"
+Output: {"isAction": true, "confidence": 0.95, "actionType": "modify_text_size", "targetDescription": null, "additionalData": "decrease", "reasoning": "Text size"}
+
+Input: "Reset text size"
+Output: {"isAction": true, "confidence": 0.95, "actionType": "modify_text_size", "targetDescription": null, "additionalData": "reset", "reasoning": "Text size"}
+
+Input: "Can you make the text size on the page bigger"
+Output: {"isAction": true, "confidence": 0.95, "actionType": "modify_text_size", "targetDescription": null, "additionalData": "increase", "reasoning": "Text size"}
+
+Input: "Enable dark mode"
+Output: {"isAction": true, "confidence": 0.95, "actionType": "modify_theme", "targetDescription": null, "additionalData": "dark", "reasoning": "Dark mode"}
+
+Input: "Hide ads"
+Output: {"isAction": true, "confidence": 0.95, "actionType": "modify_visibility", "targetDescription": "ads", "additionalData": "hide", "reasoning": "Hide elements"}
+
+Input: "Change background to blue"
+Output: {"isAction": true, "confidence": 0.95, "actionType": "modify_color", "targetDescription": "background", "additionalData": "blue", "reasoning": "Color change"}
 
 Return ONLY the JSON object.`;
 
@@ -1154,6 +1182,17 @@ Return ONLY the JSON object.`;
         }
 
         console.log("Lavio: Parsed intent:", intent);
+
+        // CRITICAL: If AI identified an actionType, isAction MUST be true
+        // This prevents inconsistent responses like {actionType: "modify_text_size", isAction: false}
+        if (intent.actionType && !intent.isAction) {
+          console.warn(
+            "Lavio: AI set actionType but isAction=false, fixing inconsistency"
+          );
+          intent.isAction = true;
+          intent.confidence = Math.max(intent.confidence, 0.8);
+          intent.reasoning = "Fixed: actionType detected";
+        }
 
         // Double-check with heuristics if AI says it's not an action
         // but it contains clear action keywords in an imperative context
@@ -1206,6 +1245,38 @@ Return ONLY the JSON object.`;
             "focus on",
             "go back",
             "go forward",
+            "make text",
+            "make the text",
+            "text larger",
+            "text smaller",
+            "text bigger",
+            "text size",
+            "font size",
+            "bigger text",
+            "smaller text",
+            "increase text",
+            "decrease text",
+            "reduce text",
+            "reset text",
+            "normal text",
+            "default text",
+            "dark mode",
+            "light mode",
+            "enable dark",
+            "disable dark",
+            "hide ads",
+            "hide sidebar",
+            "show ads",
+            "change background",
+            "change color",
+            "zoom in",
+            "zoom out",
+            "reset page",
+            "reader mode",
+            "focus mode",
+            "can you make",
+            "can you change",
+            "can you hide",
           ];
           const hasStrongActionKeyword = actionKeywords.some((keyword) =>
             lowerInput.includes(keyword)
@@ -1273,6 +1344,31 @@ Return ONLY the JSON object.`;
           "type in",
           "type into",
           "focus on",
+          "make text",
+          "make the text",
+          "text larger",
+          "text smaller",
+          "text bigger",
+          "text size",
+          "font size",
+          "bigger text",
+          "smaller text",
+          "increase text",
+          "decrease text",
+          "reduce text",
+          "reset text",
+          "normal text",
+          "default text",
+          "dark mode",
+          "light mode",
+          "hide ads",
+          "change background",
+          "change color",
+          "zoom in",
+          "zoom out",
+          "can you make",
+          "can you change",
+          "can you hide",
         ];
 
         const hasActionKeyword = actionKeywords.some((keyword) =>

@@ -28,6 +28,7 @@ class LavioContent {
     // Action execution system
     this.elementDetector = new ElementDetector();
     this.actionExecutor = new ActionExecutor();
+    this.pageManipulator = new PageManipulator();
     this.detectedElements = [];
 
     this.init();
@@ -1304,6 +1305,160 @@ class LavioContent {
             await this.speakText(message, "en-US");
           } else {
             this.addToConversation("AI", `Failed to type: ${result.error}`);
+          }
+          break;
+
+        // PAGE MANIPULATION ACTIONS
+        case "modify_text_size":
+          // Smart default: infer action from user's words if additionalData is missing
+          let textSizeAction = intent.additionalData;
+
+          if (!textSizeAction && originalText) {
+            const lower = originalText.toLowerCase();
+
+            // Check for decrease/smaller keywords
+            if (
+              lower.includes("smaller") ||
+              lower.includes("decrease") ||
+              lower.includes("reduce") ||
+              lower.includes("shrink") ||
+              lower.match(/\bless\b/)
+            ) {
+              textSizeAction = "decrease";
+              console.log("Lavio: Inferred text size action: decrease");
+            }
+            // Check for reset keywords
+            else if (
+              lower.includes("reset") ||
+              lower.includes("normal") ||
+              lower.includes("default") ||
+              lower.includes("original")
+            ) {
+              textSizeAction = "reset";
+              console.log("Lavio: Inferred text size action: reset");
+            }
+            // Default to increase for bigger/larger/increase or any other case
+            else {
+              textSizeAction = "increase";
+              console.log(
+                "Lavio: Inferred text size action: increase (default)"
+              );
+            }
+          } else if (!textSizeAction) {
+            // If still no action, default to increase
+            textSizeAction = "increase";
+            console.log("Lavio: Using default text size action: increase");
+          }
+
+          result = this.pageManipulator.adjustTextSize(textSizeAction, null);
+          if (result.success) {
+            this.addToConversation("AI", `✓ ${result.message}`);
+            await this.speakText(result.message, "en-US");
+          } else {
+            this.addToConversation("AI", `Failed: ${result.message}`);
+          }
+          break;
+
+        case "modify_theme":
+          const enableDark = intent.additionalData === "dark";
+          result = this.pageManipulator.toggleDarkMode(enableDark);
+          if (result.success) {
+            this.addToConversation("AI", `✓ ${result.message}`);
+            await this.speakText(result.message, "en-US");
+          } else {
+            this.addToConversation("AI", `Failed: ${result.message}`);
+          }
+          break;
+
+        case "modify_color":
+          if (intent.targetDescription === "background") {
+            result = this.pageManipulator.changeBackgroundColor(
+              intent.additionalData
+            );
+          } else if (intent.targetDescription === "text") {
+            result = this.pageManipulator.changeTextColor(
+              intent.additionalData
+            );
+          }
+          if (result && result.success) {
+            this.addToConversation("AI", `✓ ${result.message}`);
+            await this.speakText(result.message, "en-US");
+          } else {
+            this.addToConversation("AI", "Failed to change color");
+          }
+          break;
+
+        case "modify_visibility":
+          if (intent.additionalData === "hide") {
+            result = this.pageManipulator.hideElements(
+              intent.targetDescription
+            );
+          } else if (intent.additionalData === "show") {
+            result = this.pageManipulator.showElements(
+              intent.targetDescription
+            );
+          }
+          if (result && result.success) {
+            this.addToConversation("AI", `✓ ${result.message}`);
+            await this.speakText(result.message, "en-US");
+          } else {
+            this.addToConversation(
+              "AI",
+              result?.message || "Failed to modify visibility"
+            );
+          }
+          break;
+
+        case "modify_layout":
+          if (intent.targetDescription === "width") {
+            result = this.pageManipulator.adjustWidth(intent.additionalData);
+          } else if (intent.targetDescription === "center") {
+            result = this.pageManipulator.centerContent();
+          }
+          if (result && result.success) {
+            this.addToConversation("AI", `✓ ${result.message}`);
+            await this.speakText(result.message, "en-US");
+          } else {
+            this.addToConversation("AI", "Failed to modify layout");
+          }
+          break;
+
+        case "modify_focus":
+          if (intent.additionalData === "enable") {
+            result = this.pageManipulator.enableFocusMode();
+          } else if (intent.additionalData === "reader") {
+            result = this.pageManipulator.enableReaderMode();
+          } else {
+            result = this.pageManipulator.disableFocusMode();
+          }
+          if (result && result.success) {
+            this.addToConversation("AI", `✓ ${result.message}`);
+            await this.speakText(result.message, "en-US");
+          } else {
+            this.addToConversation(
+              "AI",
+              result?.message || "Failed to modify focus mode"
+            );
+          }
+          break;
+
+        case "modify_zoom":
+          result = this.pageManipulator.setZoom(intent.additionalData || "in");
+          if (result.success) {
+            this.addToConversation("AI", `✓ ${result.message}`);
+            await this.speakText(result.message, "en-US");
+          } else {
+            this.addToConversation("AI", `Failed: ${result.message}`);
+          }
+          break;
+
+        case "modify_reset":
+          result = this.pageManipulator.resetAll();
+          if (result.success) {
+            this.addToConversation("AI", `✓ ${result.message}`);
+            await this.speakText(result.message, "en-US");
+          } else {
+            this.addToConversation("AI", `Failed: ${result.message}`);
           }
           break;
 

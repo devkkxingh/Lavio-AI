@@ -15,6 +15,7 @@
         "voice-recorder.js",
         "element-detector.js",
         "action-executor.js",
+        "page-manipulator.js",
         "onboarding.js",
         "content.js"
       ],
