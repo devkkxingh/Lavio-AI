@@ -53,75 +53,82 @@ class LavioBackground {
       try {
         let audioSupported = false;
         let imageSupported = false;
-        
+
         // Test audio multimodal support
         try {
           const audioTestSession = await LanguageModel.create({
             systemPrompt: "Test audio capabilities",
-            expectedInputs: [{ type: 'audio' }]
+            expectedInputs: [{ type: "audio" }],
           });
-          
+
           // Create a small test audio blob (empty but valid format)
-          const testAudioBlob = new Blob([''], { type: 'audio/wav' });
-          
-          await audioTestSession.prompt([{
-            role: "user",
-            content: [
-              {
-                type: "text",
-                value: "Test audio"
-              },
-              {
-                type: "audio", 
-                value: testAudioBlob
-              }
-            ]
-          }]);
-          
+          const testAudioBlob = new Blob([""], { type: "audio/wav" });
+
+          await audioTestSession.prompt([
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  value: "Test audio",
+                },
+                {
+                  type: "audio",
+                  value: testAudioBlob,
+                },
+              ],
+            },
+          ]);
+
           audioSupported = true;
           console.log("✓ Audio multimodal capabilities detected");
           audioTestSession.destroy();
         } catch (audioError) {
           console.log("✗ Audio multimodal test failed:", audioError.message);
         }
-        
+
         // Test image multimodal support
         try {
           const imageTestSession = await LanguageModel.create({
             systemPrompt: "Test image capabilities",
-            expectedInputs: [{ type: 'image' }]
+            expectedInputs: [{ type: "image" }],
           });
-          
+
           // Create a small test image blob (1x1 pixel PNG)
-          const testImageData = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
+          const testImageData =
+            "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==";
           const testImageResponse = await fetch(testImageData);
           const testImageBlob = await testImageResponse.blob();
-          
-          await imageTestSession.prompt([{
-            role: "user",
-            content: [
-              {
-                type: "text",
-                value: "Test image"
-              },
-              {
-                type: "image", 
-                value: testImageBlob
-              }
-            ]
-          }]);
-          
+
+          await imageTestSession.prompt([
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  value: "Test image",
+                },
+                {
+                  type: "image",
+                  value: testImageBlob,
+                },
+              ],
+            },
+          ]);
+
           imageSupported = true;
           console.log("✓ Image multimodal capabilities detected");
           imageTestSession.destroy();
         } catch (imageError) {
           console.log("✗ Image multimodal test failed:", imageError.message);
         }
-        
+
         multimodalAvailable = audioSupported || imageSupported;
-        
+
         if (multimodalAvailable) {
-          console.log(`✓ Multimodal capabilities available: Audio=${audioSupported}, Image=${imageSupported}`);
+          console.log(
+            `✓ Multimodal capabilities available: Audio=${audioSupported}, Image=${imageSupported}`
+          );
           // Store which capabilities are supported for later use
           this.audioSupported = audioSupported;
           this.imageSupported = imageSupported;
@@ -130,9 +137,11 @@ class LavioBackground {
           this.audioSupported = false;
           this.imageSupported = false;
         }
-        
       } catch (sessionError) {
-        console.log("✗ Could not create test session for multimodal detection:", sessionError.message);
+        console.log(
+          "✗ Could not create test session for multimodal detection:",
+          sessionError.message
+        );
         multimodalAvailable = false;
         this.audioSupported = false;
         this.imageSupported = false;
@@ -219,7 +228,9 @@ class LavioBackground {
 
     // Check if image multimodal is supported
     if (!this.imageSupported) {
-      console.log("Image multimodal not supported, returning fallback response");
+      console.log(
+        "Image multimodal not supported, returning fallback response"
+      );
       return {
         response:
           "I'm sorry, but image processing is not available in your current Chrome version. The AI is running in text-only mode. Please describe the image in text instead, and I'll be happy to help!",
@@ -273,8 +284,10 @@ class LavioBackground {
       }
 
       // Add the image input with proper multimodal format
-      const imagePrompt = context.prompt || "Please analyze this image and describe what you see. Provide detailed insights about the content, objects, text, and any relevant information.";
-      
+      const imagePrompt =
+        context.prompt ||
+        "Please analyze this image and describe what you see. Provide detailed insights about the content, objects, text, and any relevant information.";
+
       promptArray.push({
         role: "user",
         content: [
@@ -290,10 +303,10 @@ class LavioBackground {
       });
 
       const response = await this.aiSession.prompt(promptArray);
-      
+
       return {
         response: response,
-        analysis: response // For backward compatibility
+        analysis: response, // For backward compatibility
       };
     } catch (error) {
       console.error("Error processing image input:", error);
@@ -365,10 +378,10 @@ class LavioBackground {
       if (useMultimodal) {
         const expectedInputs = [];
         if (this.audioSupported) {
-          expectedInputs.push({ type: 'audio' });
+          expectedInputs.push({ type: "audio" });
         }
         if (this.imageSupported) {
-          expectedInputs.push({ type: 'image' });
+          expectedInputs.push({ type: "image" });
         }
         if (expectedInputs.length > 0) {
           sessionConfig.expectedInputs = expectedInputs;
@@ -499,7 +512,10 @@ class LavioBackground {
               return;
             }
           }
-          const summary = await this.summarizePage(message.content, message.language);
+          const summary = await this.summarizePage(
+            message.content,
+            message.language
+          );
           sendResponse({ success: true, summary });
           break;
 
@@ -518,9 +534,27 @@ class LavioBackground {
           sendResponse({ success: true, translation });
           break;
 
+        case "DETECT_INTENT":
+          if (!this.aiSession) {
+            const initResult = await this.initializeAI();
+            if (!initResult.success) {
+              sendResponse({ success: false, error: initResult.error });
+              return;
+            }
+          }
+          const intent = await this.detectActionIntent(
+            message.text,
+            message.pageElements || []
+          );
+          sendResponse({ success: true, intent });
+          break;
+
         case "TEXT_TO_SPEECH":
           try {
-            const audioUrl = await this.textToSpeech(message.text, message.language);
+            const audioUrl = await this.textToSpeech(
+              message.text,
+              message.language
+            );
             sendResponse({ success: true, audioUrl });
           } catch (error) {
             sendResponse({ success: false, error: error.message });
@@ -690,7 +724,9 @@ class LavioBackground {
 
     // Check if audio multimodal is supported
     if (!this.audioSupported) {
-      console.log("Audio multimodal not supported, returning fallback response");
+      console.log(
+        "Audio multimodal not supported, returning fallback response"
+      );
       return {
         response:
           "I'm sorry, but voice processing is not available in your current Chrome version. The AI is running in text-only mode. Please type your message instead, and I'll be happy to help!",
@@ -749,7 +785,8 @@ class LavioBackground {
         content: [
           {
             type: "text",
-            value: "Please first transcribe this voice message exactly as spoken, then provide your response. Format your response as: 'TRANSCRIPTION: [exact words spoken] RESPONSE: [your response]'",
+            value:
+              "Please first transcribe this voice message exactly as spoken, then provide your response. Format your response as: 'TRANSCRIPTION: [exact words spoken] RESPONSE: [your response]'",
           },
           {
             type: "audio",
@@ -759,23 +796,25 @@ class LavioBackground {
       });
 
       const response = await this.aiSession.prompt(promptArray);
-      
+
       // Try to parse the response to extract transcription and AI response
       let transcription = null;
       let aiResponse = response;
-      
-      if (typeof response === 'string') {
-        const transcriptionMatch = response.match(/TRANSCRIPTION:\s*(.*?)\s*RESPONSE:\s*(.*)/s);
+
+      if (typeof response === "string") {
+        const transcriptionMatch = response.match(
+          /TRANSCRIPTION:\s*(.*?)\s*RESPONSE:\s*(.*)/s
+        );
         if (transcriptionMatch) {
           transcription = transcriptionMatch[1].trim();
           aiResponse = transcriptionMatch[2].trim();
         }
       }
-      
+
       return {
         transcription: transcription,
         response: aiResponse,
-        fullResponse: response
+        fullResponse: response,
       };
     } catch (error) {
       console.error("Error processing audio input:", error);
@@ -799,39 +838,39 @@ class LavioBackground {
     }
   }
 
-  async summarizePage(content, language = 'en') {
+  async summarizePage(content, language = "en") {
     try {
       // Create language-specific prompt
       let prompt;
-      if (language && language !== 'en') {
+      if (language && language !== "en") {
         const languageNames = {
-          'es': 'Spanish',
-          'fr': 'French', 
-          'de': 'German',
-          'it': 'Italian',
-          'pt': 'Portuguese',
-          'ru': 'Russian',
-          'ja': 'Japanese',
-          'ko': 'Korean',
-          'zh': 'Chinese',
-          'ar': 'Arabic',
-          'hi': 'Hindi',
-          'nl': 'Dutch',
-          'sv': 'Swedish',
-          'no': 'Norwegian',
-          'da': 'Danish',
-          'fi': 'Finnish',
-          'pl': 'Polish',
-          'tr': 'Turkish',
-          'he': 'Hebrew',
-          'th': 'Thai'
+          es: "Spanish",
+          fr: "French",
+          de: "German",
+          it: "Italian",
+          pt: "Portuguese",
+          ru: "Russian",
+          ja: "Japanese",
+          ko: "Korean",
+          zh: "Chinese",
+          ar: "Arabic",
+          hi: "Hindi",
+          nl: "Dutch",
+          sv: "Swedish",
+          no: "Norwegian",
+          da: "Danish",
+          fi: "Finnish",
+          pl: "Polish",
+          tr: "Turkish",
+          he: "Hebrew",
+          th: "Thai",
         };
         const languageName = languageNames[language] || language;
         prompt = `Summarize the following content concisely in ${languageName}. Provide 4-6 bullet points and a one-line TL;DR.\n\n${content}`;
       } else {
         prompt = `Summarize the following content concisely. Provide 4-6 bullet points and a one-line TL;DR.\n\n${content}`;
       }
-      
+
       return await this.processPrompt(prompt);
     } catch (error) {
       console.error("Error summarizing page:", error);
@@ -850,36 +889,133 @@ class LavioBackground {
     }
   }
 
-  async textToSpeech(text, language = 'en') {
+  /**
+   * Detect if user input is an action request or a question
+   * @param {string} userInput - The user's voice/text input
+   * @param {Array} pageElements - Available elements on the page
+   * @returns {Promise<Object>} Intent classification and action details
+   */
+  async detectActionIntent(userInput, pageElements = []) {
+    try {
+      // Create a prompt that asks AI to classify the intent
+      const elementsDescription =
+        pageElements.length > 0
+          ? `\n\nAvailable interactive elements on the page:\n${pageElements
+              .slice(0, 20)
+              .map(
+                (el, i) =>
+                  `${i + 1}. ${el.type}: "${
+                    el.text || el.label || el.placeholder || "unnamed"
+                  }"`
+              )
+              .join("\n")}`
+          : "";
+
+      const prompt = `CLASSIFICATION TASK: Analyze this user input and determine if it's an ACTION REQUEST or a QUESTION.
+
+User Input: "${userInput}"
+${elementsDescription}
+
+ACTION REQUESTS are commands to interact with the page, like:
+- Click on [element]
+- Scroll down/up
+- Go back/forward
+- Type [text] in [field]
+- Focus on [element]
+- Open [link]
+
+QUESTIONS are requests for information, like:
+- What is this page about?
+- Tell me about [topic]
+- Explain [concept]
+- Summarize this
+
+FOR THIS TASK ONLY, respond in this EXACT JSON format (do not use this format for other tasks):
+{
+  "isAction": true/false,
+  "confidence": 0.0-1.0,
+  "actionType": "click/scroll/navigate/type/focus" OR null,
+  "targetDescription": "description of target element" OR null,
+  "additionalData": "any extra data like text to type" OR null,
+  "reasoning": "brief explanation"
+}
+
+Return ONLY the JSON object, nothing else.`;
+
+      const response = await this.aiSession.prompt(prompt);
+
+      // Parse the JSON response
+      try {
+        // Extract JSON from response (AI might include extra text)
+        const jsonMatch = response.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+          throw new Error("No JSON found in response");
+        }
+
+        const intent = JSON.parse(jsonMatch[0]);
+
+        // Validate the response structure
+        if (typeof intent.isAction !== "boolean") {
+          throw new Error("Invalid intent format");
+        }
+
+        return intent;
+      } catch (parseError) {
+        console.error("Error parsing intent JSON:", parseError);
+        // Fallback: treat as question if parsing fails
+        return {
+          isAction: false,
+          confidence: 0.5,
+          actionType: null,
+          targetDescription: null,
+          additionalData: null,
+          reasoning: "Failed to parse intent, treating as question",
+        };
+      }
+    } catch (error) {
+      console.error("Error detecting intent:", error);
+      // Fallback to treating as question on error
+      return {
+        isAction: false,
+        confidence: 0,
+        actionType: null,
+        targetDescription: null,
+        additionalData: null,
+        reasoning: `Error: ${error.message}`,
+      };
+    }
+  }
+
+  async textToSpeech(text, language = "en") {
     try {
       // Check if browser supports Speech Synthesis API
-      if (typeof speechSynthesis === 'undefined') {
-        throw new Error('Text-to-speech not supported in this browser');
+      if (typeof speechSynthesis === "undefined") {
+        throw new Error("Text-to-speech not supported in this browser");
       }
 
       return new Promise((resolve, reject) => {
         // Create speech synthesis utterance
         const utterance = new SpeechSynthesisUtterance(text);
-        
+
         // Set language if provided
         if (language) {
-          utterance.lang = language === 'zh' ? 'zh-CN' : language;
+          utterance.lang = language === "zh" ? "zh-CN" : language;
         }
-        
+
         // Configure speech parameters
         utterance.rate = 0.9;
         utterance.pitch = 1.0;
         utterance.volume = 1.0;
-        
+
         // Handle events
         utterance.onend = () => {
-          resolve({ success: true, message: 'Speech completed' });
+          resolve({ success: true, message: "Speech completed" });
         };
-        
+
         utterance.onerror = (event) => {
           reject(new Error(`Speech synthesis error: ${event.error}`));
         };
-        
+
         // Start speaking
         speechSynthesis.speak(utterance);
       });

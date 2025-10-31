@@ -3,26 +3,18 @@
   "name": "Lavio AI",
   "version": "1.0.0",
   "description": "Real-time voice conversations with AI for enhanced web browsing and productivity using Chrome's Built-in AI",
-  "permissions": [
-    "activeTab",
-    "storage",
-    "scripting",
-    "tabs",
-    "offscreen"
-  ],
-  "host_permissions": [
-    "<all_urls>"
-  ],
+  "permissions": ["activeTab", "storage", "scripting", "tabs", "offscreen"],
+  "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
-      "matches": [
-        "<all_urls>"
-      ],
+      "matches": ["<all_urls>"],
       "js": [
         "voice-recorder.js",
+        "element-detector.js",
+        "action-executor.js",
         "content.js"
       ],
       "run_at": "document_end"
@@ -47,13 +39,8 @@
   "options_page": "options/options.html",
   "web_accessible_resources": [
     {
-      "resources": [
-        "assets/*",
-        "voice-recorder.js"
-      ],
-      "matches": [
-        "<all_urls>"
-      ]
+      "resources": ["assets/*", "voice-recorder.js"],
+      "matches": ["<all_urls>"]
     }
   ]
 }

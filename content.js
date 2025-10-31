@@ -25,6 +25,11 @@ class LavioContent {
     this.recognizedText = "";
     this.initializeSpeechRecognition();
 
+    // Action execution system
+    this.elementDetector = new ElementDetector();
+    this.actionExecutor = new ActionExecutor();
+    this.detectedElements = [];
+
     this.init();
   }
 
@@ -984,6 +989,212 @@ class LavioContent {
       // Show typing indicator
       this.showTypingIndicator();
 
+      // Detect all interactive elements on the page
+      this.detectedElements = this.elementDetector.getAllInteractiveElements();
+      console.log(
+        `Lavio: Detected ${this.detectedElements.length} interactive elements`
+      );
+
+      // Detect intent: Is this an action request or a question?
+      this.sendActivityUpdate("processing", 30);
+      const intentResponse = await chrome.runtime.sendMessage({
+        type: "DETECT_INTENT",
+        text: text,
+        pageElements: this.detectedElements.map((el) => ({
+          type: el.type,
+          text: el.text,
+          label: el.label,
+          placeholder: el.placeholder,
+        })),
+      });
+
+      if (!intentResponse.success) {
+        throw new Error("Failed to detect intent");
+      }
+
+      const intent = intentResponse.intent;
+      console.log("Lavio: Detected intent:", intent);
+
+      // Route based on intent
+      if (intent.isAction && intent.confidence > 0.6) {
+        // This is an ACTION REQUEST
+        await this.handleActionRequest(intent, text);
+      } else {
+        // This is a QUESTION - process normally
+        await this.handleQuestionRequest(text);
+      }
+    } catch (error) {
+      // Hide typing indicator on error
+      this.hideTypingIndicator();
+      console.error("Error processing recognized speech:", error);
+      this.updateStatus("Error occurred. Try again.");
+      this.sendActivityUpdate("idle");
+      this.addToConversation(
+        "AI",
+        "Sorry, I encountered an error. Please try again."
+      );
+    }
+  }
+
+  /**
+   * Handle action requests (click, scroll, navigate, type)
+   */
+  async handleActionRequest(intent, originalText) {
+    try {
+      this.hideTypingIndicator();
+      this.updateStatus(`Executing: ${intent.actionType}...`);
+
+      let result = null;
+
+      switch (intent.actionType) {
+        case "click":
+        case "focus":
+          // Find the target element
+          const targetElement = this.elementDetector.findElementByDescription(
+            intent.targetDescription
+          );
+
+          if (!targetElement) {
+            this.addToConversation(
+              "AI",
+              `I couldn't find "${intent.targetDescription}" on this page. Please try being more specific.`
+            );
+            this.updateStatus("Ready to listen...");
+            this.sendActivityUpdate("idle");
+            return;
+          }
+
+          // Validate action safety
+          const validation = this.actionExecutor.validateAction(
+            intent.actionType,
+            targetElement.element
+          );
+
+          if (!validation.safe) {
+            this.addToConversation(
+              "AI",
+              `Sorry, I can't do that: ${validation.reason}`
+            );
+            this.updateStatus("Ready to listen...");
+            this.sendActivityUpdate("idle");
+            return;
+          }
+
+          // Execute the action
+          if (intent.actionType === "click") {
+            result = await this.actionExecutor.executeClick(
+              targetElement.element
+            );
+          } else {
+            result = await this.actionExecutor.executeFocus(
+              targetElement.element
+            );
+          }
+
+          if (result.success) {
+            const message = `✓ ${
+              intent.actionType === "click" ? "Clicked" : "Focused"
+            } on "${targetElement.text || targetElement.label || "element"}"`;
+            this.addToConversation("AI", message);
+            await this.speakText(message, "en-US");
+          } else {
+            this.addToConversation(
+              "AI",
+              `Failed to ${intent.actionType}: ${result.error}`
+            );
+          }
+          break;
+
+        case "scroll":
+          // Extract direction from target description or additional data
+          const direction =
+            intent.targetDescription || intent.additionalData || "down";
+          result = await this.actionExecutor.executeScroll(direction);
+
+          if (result.success) {
+            const message = `✓ Scrolled ${direction}`;
+            this.addToConversation("AI", message);
+            await this.speakText(message, "en-US");
+          } else {
+            this.addToConversation("AI", `Failed to scroll: ${result.error}`);
+          }
+          break;
+
+        case "navigate":
+          // Extract navigation action
+          const navAction =
+            intent.targetDescription || intent.additionalData || "back";
+          result = await this.actionExecutor.executeNavigate(navAction);
+
+          if (result.success) {
+            const message = `✓ Navigating ${navAction}`;
+            this.addToConversation("AI", message);
+            await this.speakText(message, "en-US");
+          } else {
+            this.addToConversation("AI", `Failed to navigate: ${result.error}`);
+          }
+          break;
+
+        case "type":
+          // Find input element
+          const inputElement = this.elementDetector.findElementByDescription(
+            intent.targetDescription
+          );
+
+          if (!inputElement) {
+            this.addToConversation(
+              "AI",
+              `I couldn't find the input field "${intent.targetDescription}". Please try again.`
+            );
+            this.updateStatus("Ready to listen...");
+            this.sendActivityUpdate("idle");
+            return;
+          }
+
+          // Type the text
+          const textToType = intent.additionalData || "";
+          result = await this.actionExecutor.executeType(
+            inputElement.element,
+            textToType
+          );
+
+          if (result.success) {
+            const message = `✓ Typed "${textToType}" in ${
+              inputElement.label || "field"
+            }`;
+            this.addToConversation("AI", message);
+            await this.speakText(message, "en-US");
+          } else {
+            this.addToConversation("AI", `Failed to type: ${result.error}`);
+          }
+          break;
+
+        default:
+          this.addToConversation(
+            "AI",
+            `I don't know how to perform action: ${intent.actionType}`
+          );
+      }
+
+      this.updateStatus("Ready to listen...");
+      this.sendActivityUpdate("idle");
+      this.updateStats("conversations");
+    } catch (error) {
+      console.error("Error handling action request:", error);
+      this.addToConversation(
+        "AI",
+        "Sorry, I couldn't complete that action. Please try again."
+      );
+      this.updateStatus("Ready to listen...");
+      this.sendActivityUpdate("idle");
+    }
+  }
+
+  /**
+   * Handle question requests (normal AI responses)
+   */
+  async handleQuestionRequest(text) {
+    try {
       // Get page context with full content
       const pageContext = this.getPageContext();
       const pageContent = this.extractPageContent();
@@ -996,11 +1207,15 @@ ${pageContent}
 
 USER QUESTION: ${text}
 
+IMPORTANT: Respond in NATURAL LANGUAGE, not JSON. Do not use any JSON formatting in your response.
+
 Instructions: 
 - If the question is about the current page, website, or its content, answer based on the PAGE CONTENT above.
 - If the question is general knowledge or unrelated to the page, answer it normally.
 - Be specific and reference the page content when relevant.
-- Keep responses concise but informative.`;
+- Keep responses concise but informative.
+- Answer in a conversational, friendly tone.
+- DO NOT respond with JSON, code blocks, or structured data unless specifically asked.`;
 
       // Send to background script for AI processing
       this.sendActivityUpdate("processing", 50);
@@ -1040,9 +1255,8 @@ Instructions:
         );
       }
     } catch (error) {
-      // Hide typing indicator on error
       this.hideTypingIndicator();
-      console.error("Error processing recognized speech:", error);
+      console.error("Error handling question:", error);
       this.updateStatus("Error occurred. Try again.");
       this.sendActivityUpdate("idle");
       this.addToConversation(
