@@ -15,6 +15,7 @@
         "voice-recorder.js",
         "element-detector.js",
         "action-executor.js",
+        "onboarding.js",
         "content.js"
       ],
       "run_at": "document_end"

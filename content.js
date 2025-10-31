@@ -211,6 +211,44 @@ class LavioContent {
     // Set up event listeners
     this.setupMessageListeners();
     this.setupKeyboardShortcuts();
+
+    // Check if onboarding should be shown (with delay for better UX)
+    this.checkOnboarding();
+  }
+
+  /**
+   * Check if onboarding should be shown for first-time users
+   */
+  async checkOnboarding() {
+    try {
+      // Small delay to let the page settle
+      await new Promise((resolve) => setTimeout(resolve, 800));
+
+      // Check if LavioOnboarding is available
+      if (typeof window.LavioOnboarding === "undefined") {
+        console.warn(
+          "Lavio Content: Onboarding system not loaded, skipping onboarding check"
+        );
+        return;
+      }
+
+      const onboarding = new window.LavioOnboarding();
+      const shouldShow = await onboarding.shouldShow();
+
+      if (shouldShow) {
+        console.log(
+          "Lavio Content: First-time user detected, showing onboarding"
+        );
+        // Additional delay so user sees the widget first
+        setTimeout(() => {
+          onboarding.show();
+        }, 500);
+      } else {
+        console.log("Lavio Content: User has seen onboarding, skipping");
+      }
+    } catch (error) {
+      console.error("Lavio Content: Error checking onboarding:", error);
+    }
   }
 
   createFloatingButton() {

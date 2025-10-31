@@ -1041,24 +1041,31 @@ Return ONLY the JSON object.`;
 User Input: "${userInput}"
 ${elementsDescription}
 
-ACTION REQUESTS are commands to interact with the page (even if phrased politely), like:
+ACTION REQUESTS are commands to PHYSICALLY INTERACT with page elements, like:
 - "Click on [element]"
 - "Can you click on [element]"
 - "Please scroll down"
 - "Go back"
 - "Type [text] in [field]"
-- "Can you focus on [element]"
-- "Could you open [link]"
-- "Would you scroll up"
+- "Focus on [element]"
 
-KEY: If the user asks you to DO something on the page (click, scroll, type, navigate, focus), it's an ACTION even if they say "can you", "please", "hello", etc.
-
-QUESTIONS are requests for information only, like:
+QUESTIONS are requests for INFORMATION (even if phrased as requests), like:
 - "What is this page about?"
 - "Tell me about [topic]"
+- "Can you tell me about [something]?"
 - "Explain [concept]"
 - "Summarize this"
-- "Who is the author?"
+- "Which post has the most views?"
+- "What does this page say?"
+- "Find me the [information]"
+- "Show me the [information]"
+
+CRITICAL RULES:
+1. If the user wants INFORMATION (tell me, what is, which, who, explain, describe, find), it's a QUESTION
+2. If the user wants to INTERACT with the page (click, scroll, type, navigate), it's an ACTION
+3. Phrases like "can you tell me", "can you explain", "can you find" are QUESTIONS, not actions
+4. Looking for data/content on the page = QUESTION
+5. Manipulating the page = ACTION
 
 Respond with ONLY valid JSON. No markdown, no code blocks, no extra text. Just the JSON object.
 
@@ -1153,38 +1160,65 @@ Return ONLY the JSON object.`;
         if (!intent.isAction) {
           const lowerInput = userInput.toLowerCase();
 
+          // Check for INFORMATION REQUEST keywords (questions)
+          const informationKeywords = [
+            "tell me",
+            "what is",
+            "what are",
+            "what does",
+            "how does",
+            "why does",
+            "explain",
+            "describe",
+            "summarize",
+            "which",
+            "who",
+            "when",
+            "where",
+            "about this page",
+            "about the page",
+            "most views",
+            "most likes",
+            "most popular",
+            "find the",
+            "show me the",
+          ];
+          const isInformationRequest = informationKeywords.some((keyword) =>
+            lowerInput.includes(keyword)
+          );
+
+          // If it's clearly an information request, DON'T override
+          if (isInformationRequest) {
+            console.log(
+              "Lavio: Confirmed as information request, keeping as question"
+            );
+            return intent;
+          }
+
           // Check for action keywords (with context)
           const actionKeywords = [
             "click on",
             "press on",
+            "tap on",
             "scroll",
             "type",
             "enter",
             "focus on",
+            "go back",
+            "go forward",
           ];
           const hasStrongActionKeyword = actionKeywords.some((keyword) =>
             lowerInput.includes(keyword)
           );
 
-          // Check for request/command phrases
-          const hasRequestPhrase =
-            lowerInput.includes("can you") ||
-            lowerInput.includes("could you") ||
-            lowerInput.includes("would you") ||
-            lowerInput.includes("please") ||
-            lowerInput.includes("go back") ||
-            lowerInput.includes("go forward");
-
-          // Only override if it's clearly a command/request
-          if (
-            hasStrongActionKeyword ||
-            (hasRequestPhrase && lowerInput.length < 100)
-          ) {
+          // Only override if it has BOTH:
+          // 1. Strong action keyword AND no information request
+          // 2. OR very clear navigation commands
+          if (hasStrongActionKeyword) {
             console.warn(
-              "Lavio: AI classified as question but appears to be an action command, overriding"
+              "Lavio: AI classified as question but has strong action keyword, overriding"
             );
-            console.warn(`  - Action keyword: ${hasStrongActionKeyword}`);
-            console.warn(`  - Request phrase: ${hasRequestPhrase}`);
+            console.warn(`  - Action keyword found: ${hasStrongActionKeyword}`);
             intent.isAction = true;
             intent.confidence = Math.max(intent.confidence, 0.7);
             intent.reasoning = "Overridden - detected as action via heuristics";
@@ -1199,55 +1233,64 @@ Return ONLY the JSON object.`;
         // Fallback: Use simple heuristics to detect actions
         const lowerInput = userInput.toLowerCase();
 
-        // Check for action keywords
+        // Check for INFORMATION REQUEST keywords first
+        const informationKeywords = [
+          "tell me",
+          "what is",
+          "what are",
+          "what does",
+          "how does",
+          "why does",
+          "explain",
+          "describe",
+          "summarize",
+          "which",
+          "who",
+          "when",
+          "where",
+          "about",
+          "most views",
+          "most likes",
+          "most popular",
+          "find the",
+          "show me the",
+        ];
+        const isInformationRequest = informationKeywords.some((keyword) =>
+          lowerInput.includes(keyword)
+        );
+
+        // Check for action keywords (specific phrases)
         const actionKeywords = [
-          "click",
-          "press",
-          "tap",
+          "click on",
+          "press on",
+          "tap on",
           "scroll",
-          "swipe",
           "go back",
           "go forward",
           "navigate",
           "refresh",
           "reload",
-          "type",
-          "enter",
-          "input",
-          "fill",
-          "focus",
-          "select",
-          "open",
-          "close",
+          "type in",
+          "type into",
+          "focus on",
         ];
 
         const hasActionKeyword = actionKeywords.some((keyword) =>
           lowerInput.includes(keyword)
         );
 
-        // Check if it's phrased as a request (even polite)
-        const hasRequestPhrase =
-          lowerInput.includes("can you") ||
-          lowerInput.includes("could you") ||
-          lowerInput.includes("would you") ||
-          lowerInput.includes("please");
-
-        // If it has an action keyword, it's likely an action
-        // Even more likely if it has both action keyword and request phrase
-        const isLikelyAction =
-          hasActionKeyword &&
-          (hasRequestPhrase ||
-            !lowerInput.includes("?") || // Not a question format
-            lowerInput.split(" ").length < 15); // Short commands are usually actions
+        // INFORMATION requests override actions
+        // Only treat as action if has action keyword AND NOT an information request
+        const isLikelyAction = hasActionKeyword && !isInformationRequest;
 
         if (isLikelyAction) {
           console.log("Lavio: Using heuristic - detected as likely action");
           console.log(`  - Has action keyword: ${hasActionKeyword}`);
-          console.log(`  - Has request phrase: ${hasRequestPhrase}`);
+          console.log(`  - Is information request: ${isInformationRequest}`);
         } else {
           console.log("Lavio: Using heuristic - detected as likely question");
           console.log(`  - Has action keyword: ${hasActionKeyword}`);
-          console.log(`  - Has request phrase: ${hasRequestPhrase}`);
+          console.log(`  - Is information request: ${isInformationRequest}`);
         }
 
         // Fallback: treat as question if parsing fails
