@@ -17,6 +17,8 @@ class LavioContent {
     // Text-to-speech functionality
     this.speechSynthesis = window.speechSynthesis;
     this.isSpeaking = false;
+    this.currentSpeakerBtn = null; // Track currently playing speaker button
+    this.currentSpeakerBtnOriginalHTML = null; // Store original HTML to restore
 
     // Speech recognition functionality
     this.recognition = null;
@@ -90,7 +92,7 @@ class LavioContent {
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
             <circle cx="12" cy="12" r="8"/>
           </svg>
-          Listening...
+          <span>Listening...</span>
         `;
       }
     };
@@ -135,7 +137,7 @@ class LavioContent {
             <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
             <rect x="9" y="2" width="6" height="13" rx="3"/>
           </svg>
-          Hold to Talk
+          <span>Hold to Talk</span>
         `;
       }
 
@@ -185,7 +187,7 @@ class LavioContent {
             <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
             <rect x="9" y="2" width="6" height="13" rx="3"/>
           </svg>
-          Hold to Talk
+          <span>Hold to Talk</span>
         `;
       }
     };
@@ -323,13 +325,13 @@ class LavioContent {
               <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
               <rect x="9" y="2" width="6" height="13" rx="3"/>
             </svg>
-            Hold to Talk
+            <span>Hold to Talk</span>
           </button>
           <button id="lavio-stop-speaking" style="display: none;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
               <path d="M6 6h12v12H6z"/>
             </svg>
-            Stop Speaking
+            <span>Stop Speaking</span>
           </button>
           <button id="lavio-summarize">Summarize Page</button>
           <div class="translate-container">
@@ -482,6 +484,16 @@ class LavioContent {
         font-weight: 600;
         transition: all 0.3s ease;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      
+      .lavio-controls button svg {
+        display: block;
+        flex-shrink: 0;
+      }
+      
+      .lavio-controls button span {
+        display: block;
+        line-height: 1;
       }
       
       .record-btn {
@@ -671,6 +683,59 @@ class LavioContent {
       .hidden {
         display: none !important;
       }
+      
+      /* Typing Indicator Animation */
+      .lavio-typing-indicator {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 12px 16px;
+        margin: 8px 0;
+        background: linear-gradient(135deg, #f0f8ff 0%, #e6f3ff 100%);
+        border-left: 3px solid #6D6CFF;
+      }
+      
+      .lavio-typing-dots {
+        display: flex;
+        gap: 4px;
+      }
+      
+      .lavio-typing-dot {
+        width: 8px;
+        height: 8px;
+        background: #95a5a6;
+        border-radius: 50%;
+        animation: lavio-typing-bounce 0.6s infinite ease-in-out;
+      }
+      
+      .lavio-typing-dot:nth-child(1) {
+        animation-delay: 0s;
+      }
+      
+      .lavio-typing-dot:nth-child(2) {
+        animation-delay: 0.2s;
+      }
+      
+      .lavio-typing-dot:nth-child(3) {
+        animation-delay: 0.4s;
+      }
+      
+      @keyframes lavio-typing-bounce {
+        0%, 60%, 100% {
+          transform: translateY(0);
+          opacity: 0.7;
+        }
+        30% {
+          transform: translateY(-10px);
+          opacity: 1;
+        }
+      }
+      
+      .lavio-typing-text {
+        font-size: 13px;
+        color: #64748b;
+        font-style: italic;
+      }
     `;
 
     document.head.appendChild(style);
@@ -742,6 +807,11 @@ class LavioContent {
   async startRecording() {
     if (this.isRecording) return;
 
+    // Stop any ongoing speech before starting to record
+    if (this.isSpeaking) {
+      this.stopSpeaking();
+    }
+
     try {
       if (!this.recognition) {
         this.updateStatus("Speech recognition unavailable in this browser");
@@ -802,7 +872,7 @@ class LavioContent {
           <path d="M12 14C13.66 14 15 12.66 15 11V5C15 3.34 13.66 2 12 2C10.34 2 9 3.34 9 5V11C9 12.66 10.34 14 12 14Z"/>
           <path d="M17 11C17 14.53 14.39 17.44 11 17.93V21H13V23H11H9V21H11V17.93C7.61 17.44 5 14.53 5 11H7C7 13.76 9.24 16 12 16C14.76 16 17 13.76 17 11H17Z"/>
         </svg>
-        Hold to Talk
+        <span>Hold to Talk</span>
       `;
     }
 
@@ -904,11 +974,15 @@ class LavioContent {
 
   async processRecognizedSpeech(text) {
     try {
-      this.updateStatus("Processing your question...");
+      // Show status and typing animation
+      this.updateStatus("AI is thinking...");
       this.sendActivityUpdate("processing", 25);
 
       // Add user message to conversation
       this.addToConversation("You", text);
+
+      // Show typing indicator
+      this.showTypingIndicator();
 
       // Get page context with full content
       const pageContext = this.getPageContext();
@@ -940,6 +1014,9 @@ Instructions:
         },
       });
 
+      // Hide typing indicator
+      this.hideTypingIndicator();
+
       if (response.success) {
         // Add AI response to conversation
         this.addToConversation("AI", response.response);
@@ -955,7 +1032,7 @@ Instructions:
           // Continue even if speech fails
         }
       } else {
-        this.updateStatus("Error: " + response.error);
+        this.updateStatus("Error occurred. Try again.");
         this.sendActivityUpdate("idle");
         this.addToConversation(
           "AI",
@@ -963,8 +1040,10 @@ Instructions:
         );
       }
     } catch (error) {
+      // Hide typing indicator on error
+      this.hideTypingIndicator();
       console.error("Error processing recognized speech:", error);
-      this.updateStatus("Error processing your question");
+      this.updateStatus("Error occurred. Try again.");
       this.sendActivityUpdate("idle");
       this.addToConversation(
         "AI",
@@ -1014,7 +1093,7 @@ Instructions:
         this.updateStatus("Speaking...");
         // Show stop speaking button
         const stopBtn = this.voicePanel?.querySelector("#lavio-stop-speaking");
-        if (stopBtn) stopBtn.style.display = "block";
+        if (stopBtn) stopBtn.style.display = "flex";
       };
 
       utterance.onend = () => {
@@ -1023,6 +1102,8 @@ Instructions:
         // Hide stop speaking button
         const stopBtn = this.voicePanel?.querySelector("#lavio-stop-speaking");
         if (stopBtn) stopBtn.style.display = "none";
+
+        // Clear speaker button references (will be handled by the button's try-catch)
         resolve();
       };
 
@@ -1032,6 +1113,8 @@ Instructions:
         // Hide stop speaking button
         const stopBtn = this.voicePanel?.querySelector("#lavio-stop-speaking");
         if (stopBtn) stopBtn.style.display = "none";
+
+        // Clear speaker button references (will be handled by the button's catch block)
         console.error("Speech synthesis error:", error);
         reject(error);
       };
@@ -1045,9 +1128,23 @@ Instructions:
       this.speechSynthesis.cancel();
       this.isSpeaking = false;
       this.updateStatus("Ready to listen...");
+
       // Hide stop speaking button
       const stopBtn = this.voicePanel?.querySelector("#lavio-stop-speaking");
       if (stopBtn) stopBtn.style.display = "none";
+
+      // Restore the speaker button to its original state
+      if (this.currentSpeakerBtn && this.currentSpeakerBtnOriginalHTML) {
+        this.currentSpeakerBtn.innerHTML = this.currentSpeakerBtnOriginalHTML;
+        this.currentSpeakerBtn.style.background = "#f8f9fa";
+        this.currentSpeakerBtn.style.color = "#495057";
+        this.currentSpeakerBtn.style.boxShadow = "none";
+        this.currentSpeakerBtn.title = "Listen to this content";
+
+        // Clear the references
+        this.currentSpeakerBtn = null;
+        this.currentSpeakerBtnOriginalHTML = null;
+      }
     }
   }
 
@@ -1109,7 +1206,8 @@ Instructions:
 
       if (response.success) {
         this.addToConversation("Selected Text", selectedText);
-        this.addToConversation("Translation", response.translation);
+        // Use "AI" sender to get rich text formatting with markdown support
+        this.addToConversation("AI", response.translation);
         this.updateStatus("Translation complete");
         this.sendActivityUpdate("idle");
         this.updateStats("translations");
@@ -1185,7 +1283,8 @@ Instructions:
 
       if (response.success) {
         this.addToConversation("Selected Text", selectedText);
-        this.addToConversation("Translation", response.translation);
+        // Use "AI" sender to get rich text formatting with markdown support
+        this.addToConversation("AI", response.translation);
         this.updateStatus("Translation complete");
         this.sendActivityUpdate("idle");
         this.updateStats("translations");
@@ -1213,6 +1312,9 @@ Instructions:
     // Extract main content from the page
     const content = [];
 
+    // Maximum content length (roughly 2000 tokens)
+    const MAX_CONTENT_LENGTH = 8000;
+
     // Try to get main content areas
     const mainSelectors = [
       "main",
@@ -1230,7 +1332,14 @@ Instructions:
     }
 
     if (mainContent) {
-      content.push(mainContent.textContent.trim());
+      const text = mainContent.textContent.trim();
+      // Cap the content to prevent token limit issues
+      content.push(text.substring(0, MAX_CONTENT_LENGTH));
+
+      // Add indicator if content was truncated
+      if (text.length > MAX_CONTENT_LENGTH) {
+        content.push("\n[Content truncated - page is very long]");
+      }
     } else {
       // Fallback to body content, excluding navigation and footer
       const excludeSelectors = [
@@ -1242,7 +1351,13 @@ Instructions:
         ".sidebar",
       ];
       const bodyText = document.body.textContent.trim();
-      content.push(bodyText.substring(0, 5000)); // Limit content length
+      // Cap the content to prevent token limit issues
+      content.push(bodyText.substring(0, MAX_CONTENT_LENGTH));
+
+      // Add indicator if content was truncated
+      if (bodyText.length > MAX_CONTENT_LENGTH) {
+        content.push("\n[Content truncated - page is very long]");
+      }
     }
 
     return content.join("\n\n");
@@ -1277,13 +1392,11 @@ Instructions:
       // Add speaker button in top-right corner
       const speakBtn = document.createElement("button");
       speakBtn.innerHTML = `
- <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-mic-icon lucide-mic">
-              <path d="M12 19v3"/>
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-              <rect x="9" y="2" width="6" height="13" rx="3"/>
-      </svg>
-
-
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-mic-icon lucide-mic">
+          <path d="M12 19v3"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <rect x="9" y="2" width="6" height="13" rx="3"/>
+        </svg>
       `;
       speakBtn.style.cssText = `
         position: absolute;
@@ -1297,58 +1410,104 @@ Instructions:
         cursor: pointer;
         font-size: 14px;
         transition: all 0.2s ease;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        box-shadow: none;
         z-index: 10;
       `;
       speakBtn.title = "Listen to this content";
 
       speakBtn.addEventListener("click", async () => {
+        // If currently speaking from this button, stop it
+        if (this.isSpeaking && this.currentSpeakerBtn === speakBtn) {
+          this.stopSpeaking();
+          return;
+        }
+
         try {
+          // Store original HTML
           const originalHTML = speakBtn.innerHTML;
+
+          // Track this button as the current speaker button
+          this.currentSpeakerBtn = speakBtn;
+          this.currentSpeakerBtnOriginalHTML = originalHTML;
+
+          // Show loading state with stop icon (red) - keep button enabled
           speakBtn.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"/>
-              <path d="M8 12l4 4 4-4"/>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2">
+              <rect x="6" y="6" width="12" height="12" rx="2"/>
             </svg>
           `;
-          speakBtn.disabled = true;
-          speakBtn.style.background = "#e3f2fd";
+          speakBtn.style.background = "#fee";
+          speakBtn.style.color = "#dc3545";
+          speakBtn.style.boxShadow = "none";
+          speakBtn.title = "Click to stop";
 
-          const response = await chrome.runtime.sendMessage({
-            type: "TEXT_TO_SPEECH",
-            text: message,
-            language: "en",
-          });
+          // Use Web Speech API to speak the text
+          await this.speakText(message, "en-US");
 
-          if (!response.success) {
-            throw new Error(response.error || "Failed to speak text");
-          }
-
+          // Restore button
           speakBtn.innerHTML = originalHTML;
-          speakBtn.disabled = false;
           speakBtn.style.background = "#f8f9fa";
+          speakBtn.style.color = "#495057";
+          speakBtn.style.boxShadow = "none";
+          speakBtn.title = "Listen to this content";
+
+          // Clear the reference
+          this.currentSpeakerBtn = null;
+          this.currentSpeakerBtnOriginalHTML = null;
         } catch (error) {
           console.error("Text-to-speech error:", error);
+
+          // Restore button on error
           speakBtn.innerHTML = originalHTML;
-          speakBtn.disabled = false;
           speakBtn.style.background = "#f8f9fa";
+          speakBtn.style.color = "#495057";
+          speakBtn.style.boxShadow = "none";
+          speakBtn.title = "Listen to this content";
+
+          // Clear the reference
+          this.currentSpeakerBtn = null;
+          this.currentSpeakerBtnOriginalHTML = null;
+
+          // Show error briefly
+          const tempHTML = speakBtn.innerHTML;
+          speakBtn.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          `;
+          speakBtn.style.color = "#dc3545";
+          setTimeout(() => {
+            speakBtn.innerHTML = tempHTML;
+            speakBtn.style.color = "#495057";
+          }, 2000);
         }
       });
 
       speakBtn.addEventListener("mouseenter", () => {
-        if (!speakBtn.disabled) {
+        // If playing (red), darken the red on hover
+        if (this.isSpeaking && this.currentSpeakerBtn === speakBtn) {
+          speakBtn.style.background = "#fcc";
+          speakBtn.style.transform = "translateY(-1px)";
+        } else {
+          // If idle (gray), show blue on hover
           speakBtn.style.background = "#e3f2fd";
           speakBtn.style.transform = "translateY(-1px)";
-          speakBtn.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.15)";
         }
+        speakBtn.style.boxShadow = "none";
       });
 
       speakBtn.addEventListener("mouseleave", () => {
-        if (!speakBtn.disabled) {
+        // If playing (red), restore red background
+        if (this.isSpeaking && this.currentSpeakerBtn === speakBtn) {
+          speakBtn.style.background = "#fee";
+        } else {
+          // If idle (gray), restore gray background
           speakBtn.style.background = "#f8f9fa";
-          speakBtn.style.transform = "translateY(0)";
-          speakBtn.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
         }
+        speakBtn.style.transform = "translateY(0)";
+        speakBtn.style.boxShadow = "none";
       });
 
       contentDiv.appendChild(speakBtn);
@@ -1379,8 +1538,7 @@ Instructions:
         margin-bottom: 16px;
         padding: 12px 16px;
         background: linear-gradient(135deg, #f0f8ff 0%, #e6f3ff 100%);
-        border-radius: 8px;
-        border-left: 3px solid #4285f4;
+        border-left: 3px solid #6D6CFF;
         font-size: 14px;
         color: #495057;
         font-style: italic;
@@ -1639,6 +1797,43 @@ Instructions:
     const status = this.voicePanel?.querySelector("#lavio-status");
     if (status) {
       status.textContent = message;
+    }
+  }
+
+  showTypingIndicator() {
+    const conversation = this.voicePanel?.querySelector("#lavio-conversation");
+    if (!conversation) return;
+
+    // Remove any existing typing indicator
+    this.hideTypingIndicator();
+
+    // Create typing indicator element
+    const typingIndicator = document.createElement("div");
+    typingIndicator.className = "lavio-typing-indicator";
+    typingIndicator.id = "lavio-typing-indicator";
+    typingIndicator.innerHTML = `
+      <div class="lavio-typing-dots">
+        <div class="lavio-typing-dot"></div>
+        <div class="lavio-typing-dot"></div>
+        <div class="lavio-typing-dot"></div>
+      </div>
+      <span class="lavio-typing-text">AI is thinking...</span>
+    `;
+
+    conversation.appendChild(typingIndicator);
+    conversation.scrollTop = conversation.scrollHeight;
+
+    // Adjust widget height
+    this.adjustWidgetHeight();
+  }
+
+  hideTypingIndicator() {
+    const typingIndicator = this.voicePanel?.querySelector(
+      "#lavio-typing-indicator"
+    );
+    if (typingIndicator) {
+      typingIndicator.remove();
+      this.adjustWidgetHeight();
     }
   }
 
