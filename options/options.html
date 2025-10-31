@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lavio AI Assistant - Settings</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f8f9fa;
+      color: #333;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    .header h1 {
+      font-size: 32px;
+      font-weight: 600;
+      color: #9C88FF;
+      margin-bottom: 8px;
+    }
+
+    .header p {
+      font-size: 16px;
+      color: #666;
+    }
+
+    .settings-card {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .settings-card h2 {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #333;
+    }
+
+    .setting-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .setting-item:last-child {
+      border-bottom: none;
+    }
+
+    .setting-info h3 {
+      font-size: 16px;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+
+    .setting-info p {
+      font-size: 14px;
+      color: #666;
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: 60px;
+      height: 32px;
+      background: #ccc;
+      border-radius: 16px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    .toggle-switch.active {
+      background: #9C88FF;
+    }
+
+    .toggle-switch::before {
+      content: '';
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: 24px;
+      height: 24px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.3s ease;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .toggle-switch.active::before {
+      transform: translateX(28px);
+    }
+
+    .select-wrapper {
+      position: relative;
+      min-width: 200px;
+    }
+
+    select {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: white;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .input-wrapper {
+      min-width: 200px;
+    }
+
+    input[type="text"],
+    input[type="number"] {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-primary {
+      background: #9C88FF;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #6D6CFF;
+    }
+
+    .btn-secondary {
+      background: #f8f9fa;
+      color: #333;
+      border: 1px solid #ddd;
+    }
+
+    .btn-secondary:hover {
+      background: #e8f0fe;
+    }
+
+    .status-message {
+      padding: 12px;
+      border-radius: 6px;
+      margin-top: 16px;
+      font-size: 14px;
+      display: none;
+    }
+
+    .status-message.success {
+      background: #e8f5e8;
+      color: #2e7d32;
+      border: 1px solid #c8e6c9;
+    }
+
+    .status-message.error {
+      background: #fce8e6;
+      color: #d32f2f;
+      border: 1px solid #f28b82;
+    }
+
+    .shortcuts-list {
+      background: #f8f9fa;
+      border-radius: 6px;
+      padding: 16px;
+      margin-top: 12px;
+    }
+
+    .shortcut-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .shortcut-item:last-child {
+      border-bottom: none;
+    }
+
+    .shortcut-key {
+      background: #333;
+      color: white;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-family: monospace;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="header">
+      <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 16px;">
+        <svg width="64" height="64" viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg"
+          style="margin-right: 16px;">
+          <defs>
+            <!-- Base circle fill -->
+            <linearGradient id="baseGradOptions" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#9C88FF" />
+              <stop offset="100%" stop-color="#6D6CFF" />
+            </linearGradient>
+
+            <!-- White flower glow -->
+            <radialGradient id="flowerGlowOptions" cx="50%" cy="50%" r="60%">
+              <stop offset="0%" stop-color="white" stop-opacity="0.9" />
+              <stop offset="35%" stop-color="white" stop-opacity="0.55" />
+              <stop offset="65%" stop-color="white" stop-opacity="0.12" />
+              <stop offset="100%" stop-color="white" stop-opacity="0" />
+            </radialGradient>
+
+            <!-- Petal mask shape -->
+            <mask id="petalMaskOptions">
+              <rect width="160" height="160" fill="black" />
+              <!-- 6 circular petals -->
+              <circle cx="80" cy="34" r="28" fill="white" />
+              <circle cx="120" cy="60" r="28" fill="white" />
+              <circle cx="120" cy="100" r="28" fill="white" />
+              <circle cx="80" cy="126" r="28" fill="white" />
+              <circle cx="40" cy="100" r="28" fill="white" />
+              <circle cx="40" cy="60" r="28" fill="white" />
+            </mask>
+          </defs>
+
+          <!-- Base circle -->
+          <circle cx="80" cy="80" r="75" fill="url(#baseGradOptions)" />
+
+          <!-- Rotating flower glow -->
+          <g style="transform-origin: 80px 80px; animation: rotateFlowerOptions 9s linear infinite;">
+            <circle cx="80" cy="80" r="75" fill="url(#flowerGlowOptions)" mask="url(#petalMaskOptions)" />
+          </g>
+
+          <style>
+            @keyframes rotateFlowerOptions {
+              from {
+                transform: rotate(0deg);
+              }
+
+              to {
+                transform: rotate(360deg);
+              }
+            }
+          </style>
+        </svg>
+        <h1 style="margin: 0; color: black;">Lavio AI Assistant</h1>
+      </div>
+      <p>Configure your AI-powered voice assistant for the best experience</p>
+    </div>
+
+    <!-- General Settings -->
+    <div class="settings-card">
+      <h2>General Settings</h2>
+
+      <div class="setting-item">
+        <div class="setting-info">
+          <h3>Voice Input</h3>
+          <p>Enable voice recording and processing</p>
+        </div>
+        <div class="toggle-switch" id="voice-enabled">
+          <input type="checkbox" hidden>
+        </div>
+      </div>
+
+      <div class="setting-item">
+        <div class="setting-info">
+          <h3>Auto-Summarize Pages</h3>
+          <p>Automatically summarize long articles when you visit them</p>
+        </div>
+        <div class="toggle-switch" id="auto-summarize">
+          <input type="checkbox" hidden>
+        </div>
+      </div>
+
+      <div class="setting-item">
+        <div class="setting-info">
+          <h3>Show Floating Button</h3>
+          <p>Display the voice assistant button on all websites</p>
+        </div>
+        <div class="toggle-switch active" id="show-floating-button">
+          <input type="checkbox" hidden checked>
+        </div>
+      </div>
+
+      <div class="setting-item">
+        <div class="setting-info">
+          <h3>Preferred Language</h3>
+          <p>Default language for translations and responses</p>
+        </div>
+        <div class="select-wrapper">
+          <select id="preferred-language">
+            <option value="en">English</option>
+            <option value="es">Spanish</option>
+            <option value="fr">French</option>
+            <option value="de">German</option>
+            <option value="it">Italian</option>
+            <option value="pt">Portuguese</option>
+            <option value="ru">Russian</option>
+            <option value="ja">Japanese</option>
+            <option value="ko">Korean</option>
+            <option value="zh">Chinese</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Settings -->
+    <div class="settings-card">
+      <h2>AI Behavior</h2>
+
+      <div class="setting-item">
+        <div class="setting-info">
+          <h3>Response Length</h3>
+          <p>Preferred length for AI responses</p>
+        </div>
+        <div class="select-wrapper">
+          <select id="response-length">
+            <option value="short">Short & Concise</option>
+            <option value="medium" selected>Medium Detail</option>
+            <option value="long">Detailed & Comprehensive</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="setting-item">
+        <div class="setting-info">
+          <h3>Context Awareness</h3>
+          <p>Allow AI to understand the current webpage context</p>
+        </div>
+        <div class="toggle-switch active" id="context-awareness">
+          <input type="checkbox" hidden checked>
+        </div>
+      </div>
+
+      <div class="setting-item">
+        <div class="setting-info">
+          <h3>Conversation Memory</h3>
+          <p>Remember previous conversations in the same session</p>
+        </div>
+        <div class="toggle-switch active" id="conversation-memory">
+          <input type="checkbox" hidden checked>
+        </div>
+      </div>
+
+      <div class="setting-item">
+        <div class="setting-info">
+          <h3>Max Conversation History</h3>
+          <p>Number of conversations to keep in history</p>
+        </div>
+        <div class="input-wrapper">
+          <input type="number" id="max-history" value="20" min="5" max="100">
+        </div>
+      </div>
+    </div>
+
+    <!-- Privacy Settings -->
+    <div class="settings-card">
+      <h2>Privacy & Data</h2>
+
+      <div class="setting-item">
+        <div class="setting-info">
+          <h3>Local Processing Only</h3>
+          <p>All AI processing happens on your device (always enabled)</p>
+        </div>
+        <div class="toggle-switch active">
+          <input type="checkbox" hidden checked disabled>
+        </div>
+      </div>
+
+      <div class="setting-item">
+        <div class="setting-info">
+          <h3>Save Conversation History</h3>
+          <p>Store conversation history locally for quick access</p>
+        </div>
+        <div class="toggle-switch active" id="save-history">
+          <input type="checkbox" hidden checked>
+        </div>
+      </div>
+
+      <div class="setting-item">
+        <div class="setting-info">
+          <h3>Clear History on Exit</h3>
+          <p>Automatically clear conversation history when browser closes</p>
+        </div>
+        <div class="toggle-switch" id="clear-on-exit">
+          <input type="checkbox" hidden>
+        </div>
+      </div>
+    </div>
+
+    <!-- Keyboard Shortcuts -->
+    <div class="settings-card">
+      <h2>Keyboard Shortcuts</h2>
+      <p style="margin-bottom: 16px; color: #666;">Use these keyboard shortcuts to quickly access Lavio features:</p>
+
+      <div class="shortcuts-list">
+        <div class="shortcut-item">
+          <span>Toggle Voice Panel</span>
+          <span class="shortcut-key">Ctrl + Shift + V</span>
+        </div>
+        <div class="shortcut-item">
+          <span>Quick Summarize</span>
+          <span class="shortcut-key">Ctrl + Shift + S</span>
+        </div>
+        <div class="shortcut-item">
+          <span>Translate Selection</span>
+          <span class="shortcut-key">Ctrl + Shift + T</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Advanced Settings -->
+    <div class="settings-card">
+      <h2>Advanced</h2>
+
+      <div class="setting-item">
+        <div class="setting-info">
+          <h3>Debug Mode</h3>
+          <p>Enable detailed logging for troubleshooting</p>
+        </div>
+        <div class="toggle-switch" id="debug-mode">
+          <input type="checkbox" hidden>
+        </div>
+      </div>
+
+      <div class="setting-item">
+        <div class="setting-info">
+          <h3>Experimental Features</h3>
+          <p>Enable experimental AI features (may be unstable)</p>
+        </div>
+        <div class="toggle-switch" id="experimental-features">
+          <input type="checkbox" hidden>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="button-group">
+      <button class="btn btn-primary" id="save-settings">Save Settings</button>
+      <button class="btn btn-secondary" id="reset-settings">Reset to Defaults</button>
+      <button class="btn btn-secondary" id="export-settings">Export Settings</button>
+      <button class="btn btn-secondary" id="clear-history">Clear All History</button>
+    </div>
+
+    <div class="status-message" id="status-message"></div>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+
+</html>

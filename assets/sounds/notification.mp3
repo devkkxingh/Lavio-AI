@@ -1,0 +1,20 @@
+# Audio File Placeholder
+
+This file should contain a notification sound in MP3 format.
+For the hackathon demo, you can:
+
+1. Record a simple notification sound
+2. Use a free sound from freesound.org
+3. Generate a simple beep using audio editing software
+
+Recommended specifications:
+- Duration: 0.5-1 second
+- Format: MP3
+- Sample rate: 44.1kHz
+- Bitrate: 128kbps
+- Volume: Moderate (not too loud)
+
+The sound will be used for:
+- Voice recording start/stop notifications
+- AI response ready notifications
+- Error notifications
