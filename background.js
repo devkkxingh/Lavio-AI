@@ -549,6 +549,21 @@ class LavioBackground {
           sendResponse({ success: true, intent });
           break;
 
+        case "FIND_ELEMENT_MATCH":
+          if (!this.aiSession) {
+            const initResult = await this.initializeAI();
+            if (!initResult.success) {
+              sendResponse({ success: false, error: initResult.error });
+              return;
+            }
+          }
+          const matchResult = await this.findBestElementMatch(
+            message.description,
+            message.elements || []
+          );
+          sendResponse(matchResult);
+          break;
+
         case "TEXT_TO_SPEECH":
           try {
             const audioUrl = await this.textToSpeech(
@@ -890,6 +905,116 @@ class LavioBackground {
   }
 
   /**
+   * Use AI to find the best matching element from a list
+   * @param {string} description - User's description (e.g., "pull request tab")
+   * @param {Array} elements - List of available elements
+   * @returns {Promise<Object>} Best match with confidence
+   */
+  async findBestElementMatch(description, elements) {
+    try {
+      // Limit elements to top 30 for performance
+      const topElements = elements.slice(0, 30);
+
+      const elementsDescription = topElements
+        .map(
+          (el, i) =>
+            `${i}. ${el.type}: "${
+              el.text || el.label || el.placeholder || "unnamed"
+            }" (id: ${el.id || "none"})`
+        )
+        .join("\n");
+
+      const prompt = `ELEMENT MATCHING TASK: Find the best matching element for the user's description.
+
+User wants to interact with: "${description}"
+
+Available elements on the page:
+${elementsDescription}
+
+Your task:
+1. Find the element that BEST matches the user's description
+2. Consider synonyms and similar terms (e.g., "pull request tab" could match "Pull requests" or "PRs")
+3. Consider element type (button, link, input, etc.)
+4. Return the INDEX of the best match
+
+Respond with ONLY valid JSON:
+{
+  "matchIndex": 0,
+  "confidence": 0.95,
+  "reasoning": "Exact match"
+}
+
+Rules:
+- matchIndex: the number (0-${
+        topElements.length - 1
+      }) of the matching element, or -1 if no good match
+- confidence: 0.0 to 1.0 (how sure you are)
+- reasoning: brief explanation (under 30 characters)
+- If no good match exists, use matchIndex: -1 and confidence: 0.0
+
+Return ONLY the JSON object.`;
+
+      const response = await this.aiSession.prompt(prompt);
+
+      // Parse response
+      try {
+        console.log(
+          "Lavio: AI element match response:",
+          response.substring(0, 200)
+        );
+
+        let cleanedResponse = response.trim();
+        cleanedResponse = cleanedResponse
+          .replace(/```json\s*/g, "")
+          .replace(/```\s*$/g, "");
+
+        const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+          throw new Error("No JSON found in response");
+        }
+
+        const result = JSON.parse(jsonMatch[0]);
+
+        // Validate
+        if (
+          typeof result.matchIndex !== "number" ||
+          typeof result.confidence !== "number"
+        ) {
+          throw new Error("Invalid match format");
+        }
+
+        console.log("Lavio: AI element match result:", result);
+
+        return {
+          success: true,
+          matchIndex: result.matchIndex,
+          confidence: result.confidence,
+          reasoning: result.reasoning || "AI match",
+        };
+      } catch (parseError) {
+        console.error(
+          "Lavio: Error parsing element match JSON:",
+          parseError.message
+        );
+        return {
+          success: false,
+          matchIndex: -1,
+          confidence: 0,
+          reasoning: "Failed to parse AI response",
+        };
+      }
+    } catch (error) {
+      console.error("Error finding element match:", error);
+      return {
+        success: false,
+        matchIndex: -1,
+        confidence: 0,
+        reasoning: `Error: ${error.message}`,
+      };
+    }
+  }
+
+  /**
    * Detect if user input is an action request or a question
    * @param {string} userInput - The user's voice/text input
    * @param {Array} pageElements - Available elements on the page
@@ -954,6 +1079,28 @@ Rules for JSON:
 - Use numbers without quotes for confidence (0.0 to 1.0)
 - For actionType, use ONLY: "click", "scroll", "navigate", "type", "focus", or null
 - Keep reasoning under 50 characters
+
+IMPORTANT - Field Descriptions:
+- actionType: The type of action (click, scroll, navigate, type, focus)
+- targetDescription: WHAT element to interact with (e.g., "search bar", "back button", "email field")
+- additionalData: EXTRA information needed for the action
+  * For "type": the TEXT to type (e.g., "Krishna", "hello world")
+  * For "scroll": direction (e.g., "down", "up", "top", "bottom")
+  * For "navigate": action (e.g., "back", "forward", "refresh")
+  * For "click" and "focus": use null
+
+EXAMPLES:
+Input: "Type Krishna in Go to file"
+Output: {"isAction": true, "confidence": 0.95, "actionType": "type", "targetDescription": "Go to file", "additionalData": "Krishna", "reasoning": "Type action"}
+
+Input: "Type hello world in the search box"
+Output: {"isAction": true, "confidence": 0.95, "actionType": "type", "targetDescription": "search box", "additionalData": "hello world", "reasoning": "Type action"}
+
+Input: "Click on search button"
+Output: {"isAction": true, "confidence": 0.95, "actionType": "click", "targetDescription": "search button", "additionalData": null, "reasoning": "Click action"}
+
+Input: "Scroll to the bottom"
+Output: {"isAction": true, "confidence": 0.95, "actionType": "scroll", "targetDescription": null, "additionalData": "bottom", "reasoning": "Scroll action"}
 
 Return ONLY the JSON object.`;
 

@@ -1049,10 +1049,63 @@ class LavioContent {
       switch (intent.actionType) {
         case "click":
         case "focus":
-          // Find the target element
-          const targetElement = this.elementDetector.findElementByDescription(
+          // Find the target element - try simple matching first
+          let targetElement = this.elementDetector.findElementByDescription(
             intent.targetDescription
           );
+
+          // If simple matching failed or has low confidence, try AI matching
+          if (!targetElement) {
+            console.log(
+              "Lavio: Simple matching failed, trying AI-powered matching..."
+            );
+            this.updateStatus("Finding element...");
+
+            try {
+              // Smart filtering: only send relevant elements to AI to save tokens
+              const relevantElements = this.filterRelevantElements(
+                this.detectedElements,
+                intent.targetDescription,
+                "click"
+              );
+
+              console.log(
+                `Lavio: Filtered from ${this.detectedElements.length} to ${relevantElements.filtered.length} elements for AI matching`
+              );
+
+              const aiMatchResponse = await chrome.runtime.sendMessage({
+                type: "FIND_ELEMENT_MATCH",
+                description: intent.targetDescription,
+                elements: relevantElements.filtered.map((el) => ({
+                  type: el.type,
+                  text: el.text,
+                  label: el.label,
+                  placeholder: el.placeholder,
+                  id: el.id,
+                })),
+              });
+
+              if (
+                aiMatchResponse.success &&
+                aiMatchResponse.matchIndex >= 0 &&
+                aiMatchResponse.confidence > 0.5
+              ) {
+                // Map back to original element using the mapping
+                targetElement =
+                  relevantElements.filtered[aiMatchResponse.matchIndex];
+                console.log(
+                  `Lavio: AI found match with confidence ${aiMatchResponse.confidence}`
+                );
+                console.log(
+                  `Lavio: Matched element: ${
+                    targetElement.text || targetElement.label
+                  }`
+                );
+              }
+            } catch (error) {
+              console.error("Lavio: Error using AI matching:", error);
+            }
+          }
 
           if (!targetElement) {
             this.addToConversation(
@@ -1136,10 +1189,57 @@ class LavioContent {
           break;
 
         case "type":
-          // Find input element
-          const inputElement = this.elementDetector.findElementByDescription(
+          // Find input element - try simple matching first
+          let inputElement = this.elementDetector.findElementByDescription(
             intent.targetDescription
           );
+
+          // If simple matching failed, try AI matching
+          if (!inputElement) {
+            console.log(
+              "Lavio: Simple matching failed for input, trying AI-powered matching..."
+            );
+            this.updateStatus("Finding input field...");
+
+            try {
+              // Smart filtering: only send input-related elements
+              const relevantElements = this.filterRelevantElements(
+                this.detectedElements,
+                intent.targetDescription,
+                "type"
+              );
+
+              console.log(
+                `Lavio: Filtered from ${this.detectedElements.length} to ${relevantElements.filtered.length} input elements`
+              );
+
+              const aiMatchResponse = await chrome.runtime.sendMessage({
+                type: "FIND_ELEMENT_MATCH",
+                description: intent.targetDescription,
+                elements: relevantElements.filtered.map((el) => ({
+                  type: el.type,
+                  text: el.text,
+                  label: el.label,
+                  placeholder: el.placeholder,
+                  id: el.id,
+                })),
+              });
+
+              if (
+                aiMatchResponse.success &&
+                aiMatchResponse.matchIndex >= 0 &&
+                aiMatchResponse.confidence > 0.5
+              ) {
+                inputElement =
+                  relevantElements.filtered[aiMatchResponse.matchIndex];
+                console.log(
+                  `Lavio: AI found input match with confidence ${aiMatchResponse.confidence}`
+                );
+              }
+            } catch (error) {
+              console.error("Lavio: Error using AI matching for input:", error);
+            }
+          }
 
           if (!inputElement) {
             this.addToConversation(
@@ -1264,6 +1364,103 @@ Instructions:
         "Sorry, I encountered an error. Please try again."
       );
     }
+  }
+
+  /**
+   * Smart filtering to reduce elements sent to AI
+   * Filters based on action type and relevance to save tokens
+   */
+  filterRelevantElements(elements, description, actionType) {
+    const lowerDesc = description.toLowerCase();
+
+    // Define which element types are relevant for each action
+    const relevantTypes = {
+      click: ["button", "link", "search"], // Clickable elements
+      focus: ["button", "link", "search"], // Focusable elements
+      type: ["input", "search"], // Input elements only
+    };
+
+    const allowedTypes = relevantTypes[actionType] || [];
+
+    // Step 1: Filter by element type
+    let filtered = elements.filter((el) => allowedTypes.includes(el.type));
+
+    console.log(
+      `Lavio: After type filter (${allowedTypes.join(",")}): ${
+        filtered.length
+      } elements`
+    );
+
+    // Step 2: Score elements by relevance to description
+    const scored = filtered.map((el) => {
+      let score = 0;
+      const elementText = (
+        el.text ||
+        el.label ||
+        el.placeholder ||
+        ""
+      ).toLowerCase();
+      const elementId = (el.id || "").toLowerCase();
+
+      // Keyword matching in description
+      const descWords = lowerDesc.split(/\s+/);
+      descWords.forEach((word) => {
+        if (word.length > 2) {
+          // Ignore short words
+          if (elementText.includes(word)) score += 2;
+          if (elementId.includes(word)) score += 1.5;
+        }
+      });
+
+      // Exact phrase matching
+      if (elementText.includes(lowerDesc)) score += 5;
+
+      // Partial matching
+      if (elementText && lowerDesc.includes(elementText)) score += 3;
+
+      // Priority boost for search elements when description mentions "search"
+      if (lowerDesc.includes("search") && el.type === "search") score += 3;
+
+      // Priority boost for visible/prominent elements
+      if (el.position) {
+        // Elements in top half of page are more likely to be important
+        if (el.position.top < window.innerHeight / 2) score += 0.5;
+      }
+
+      return { element: el, score };
+    });
+
+    // Step 3: Sort by score and take top 10-15 elements
+    scored.sort((a, b) => b.score - a.score);
+
+    const topElements = scored
+      .filter((item) => item.score > 0) // Only elements with some relevance
+      .slice(0, 12) // Limit to 12 elements (saves ~50% tokens vs 30)
+      .map((item) => item.element);
+
+    console.log(
+      `Lavio: After relevance scoring: ${topElements.length} elements`
+    );
+
+    // If we have too few results, add some random highly visible elements
+    if (topElements.length < 5 && filtered.length > topElements.length) {
+      const remaining = filtered.filter((el) => !topElements.includes(el));
+      const additionalElements = remaining.slice(
+        0,
+        Math.min(5, 12 - topElements.length)
+      );
+      topElements.push(...additionalElements);
+      console.log(
+        `Lavio: Added ${additionalElements.length} fallback elements`
+      );
+    }
+
+    return {
+      filtered: topElements,
+      totalScanned: elements.length,
+      typeFiltered: filtered.length,
+      finalCount: topElements.length,
+    };
   }
 
   updateVoiceButtonState() {
